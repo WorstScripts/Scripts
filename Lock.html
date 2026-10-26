@@ -70,10 +70,23 @@ var WORKER = "https://script-hub.worstasaiya.workers.dev";
 var page = "executes", scripts = null, edit = null, msg = "", bad = false, timer = 0;
 var $ = function (id) { return document.getElementById(id); };
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+
+// Asks for the admin password once per browser tab and sends it with every request.
+// If the Worker says "locked" (wrong password), the saved password is forgotten and the
+// auto-refresh stops, so refresh the page to be asked again.
 function api(path, body) {
-  var o = { cache: "no-store", headers: { "x-admin-key": sessionStorage.getItem("pw") || "" } };
+  var pw = sessionStorage.getItem("pw");
+  if (pw === null) { pw = prompt("Admin password") || ""; sessionStorage.setItem("pw", pw); }
+  var o = { cache: "no-store", headers: { "x-admin-key": pw } };
   if (body) { o.method = "POST"; o.headers["Content-Type"] = "application/json"; o.body = JSON.stringify(body); }
-  return fetch(WORKER + path, o).then(function (r) { return r.json().then(function (d) { d._ok = r.ok; return d; }); });
+  return fetch(WORKER + path, o).then(function (r) {
+    if (r.status === 401) { sessionStorage.removeItem("pw"); clearInterval(timer); }
+    return r.json().then(function (d) {
+      d._ok = r.ok;
+      if (r.status === 401) d.error = "Wrong admin password. Refresh the page to try again.";
+      return d;
+    });
+  });
 }
 function say(t, b) { msg = t; bad = !!b; var m = $("msg"); if (m) { m.textContent = t; m.className = "msg" + (b ? " bad" : ""); } }
 
