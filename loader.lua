@@ -48,6 +48,24 @@ local function runScripts(data)
     end
 end
 
+-- Only for your own accounts: set getgenv().HubListen = true before the loadstring.
+-- The account then checks the Worker every 10 seconds for scripts you pressed Run on.
+local function listen(key)
+    if not (getgenv and getgenv().HubListen) then return end
+    task.spawn(function()
+        local since = nil
+        while true do
+            local data, _, status = send(WORKER .. "/loader/poll", { key = key, since = since })
+            if status == 401 then return end
+            if data and data.ok then
+                since = data.last
+                if data.runs and #data.runs > 0 then runScripts({ scripts = data.runs }) end
+            end
+            task.wait(10)
+        end
+    end)
+end
+
 local function readSaved()
     if not (SAVE_KEY and readfile and isfile) then return nil end
     local ok, v = pcall(function() return isfile(KEY_FILE) and readfile(KEY_FILE) or nil end)
@@ -109,12 +127,12 @@ end
 local first = (getgenv and getgenv().Key) or readSaved()
 if first then
     local data = check(tostring(first))
-    if data then writeSaved(tostring(first)) runScripts(data) return end
+    if data then writeSaved(tostring(first)) runScripts(data) listen(tostring(first)) return end
 end
 
 popup(first and "Join the discord server to get updates on the new key" or nil, function(key)
     local data, err = check(key)
     if not data then return err end
-    writeSaved(key); runScripts(data)
+    writeSaved(key); runScripts(data); listen(key)
     return nil
 end)
