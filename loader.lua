@@ -1,4 +1,3 @@
-print("Executed")
 -- Script hub loader. Shows an [Enter key] popup, checks the key with the Worker, then runs your enabled auto execute scripts.
 
 local WORKER   = "https://script-hub.worstasaiya.workers.dev"
@@ -27,6 +26,13 @@ end
 local executor = "Unknown"
 pcall(function() if identifyexecutor then executor = tostring((identifyexecutor())) end end)
 
+-- Small pop-up in the corner of the game, so you can see what the loader is doing without any console.
+local function notify(text)
+    pcall(function()
+        game:GetService("StarterGui"):SetCore("SendNotification", { Title = "Script hub", Text = text, Duration = 5 })
+    end)
+end
+
 -- Returns data on success, or nil plus a message to show.
 local function check(key)
     local data, err, status = send(WORKER .. "/loader/run", {
@@ -40,6 +46,7 @@ end
 
 local function runScripts(data)
     for _, s in ipairs(data.scripts or {}) do
+        notify("Running: " .. tostring(s.name))
         task.spawn(function()
             local fn, cerr = loadstring(s.code)
             if not fn then warn("[Script hub] " .. tostring(s.name) .. " failed to load: " .. tostring(cerr)) return end
@@ -53,6 +60,7 @@ end
 -- The account then checks the Worker every 10 seconds for scripts you pressed Run on.
 local function listen(key)
     if not (getgenv and getgenv().HubListen) then return end
+    notify("Listening for Run")
     task.spawn(function()
         local since = nil
         while true do
@@ -128,12 +136,12 @@ end
 local first = (getgenv and getgenv().Key) or readSaved()
 if first then
     local data = check(tostring(first))
-    if data then writeSaved(tostring(first)) runScripts(data) listen(tostring(first)) return end
+    if data then notify("Key accepted") writeSaved(tostring(first)) runScripts(data) listen(tostring(first)) return end
 end
 
 popup(first and "Join the discord server to get updates on the new key" or nil, function(key)
     local data, err = check(key)
     if not data then return err end
-    writeSaved(key); runScripts(data); listen(key)
+    notify("Key accepted"); writeSaved(key); runScripts(data); listen(key)
     return nil
 end)
