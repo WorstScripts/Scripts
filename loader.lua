@@ -1,8 +1,9 @@
+getgenv().HubListen = true
 -- WORST AUTH | Cloudflare Worker loader
 local WORKER = "https://script-hub.worstasaiya.workers.dev"
 local DISCORD_URL = "https://discord.gg/WFY7f6XAh7"
 local SAVE_KEY = true
-local KEY_FILE = "Worst.txt"
+local KEY_FILE = "disck.txt"
 
 if not game:IsLoaded() then game.Loaded:Wait() end
 local Players = game:GetService("Players")
@@ -510,6 +511,88 @@ local function popup(firstMessage, onKey)
         end
     end
 
+    -- Wrong key effect: UI grows a little + turns red + vibrates, typed letters vanish one by one,
+    -- "Wrong Password" shows for 1 second, then everything goes back to normal.
+    local function wrongKeyEffect()
+        if not gui.Parent then return end
+        local RED = Color3.fromRGB(255, 60, 60)
+        local DARK_RED = Color3.fromRGB(45, 8, 8)
+        local baseScale = targetScale()
+        local basePos = main.Position
+        local strokeGrad = mainStroke:FindFirstChildOfClass("UIGradient")
+
+        local originalPlaceholder = input.PlaceholderText
+        input.PlaceholderText = ""   -- so it can't overlap the "Wrong Password" text
+        input.TextEditable = false
+        input.ClearTextOnFocus = false
+        input:ReleaseFocus()
+
+        -- turn red (the shimmer gradient would tint over the stroke colour, so pause it)
+        if strokeGrad then strokeGrad.Enabled = false end
+        mainStroke.Color = Color3.new(1, 1, 1)
+        TweenService:Create(mainStroke, TweenInfo.new(0.2), {Color = RED}):Play()
+        TweenService:Create(main, TweenInfo.new(0.2), {BackgroundColor3 = DARK_RED}):Play()
+
+        -- grow a little
+        TweenService:Create(scale, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+            {Scale = baseScale * 1.06}):Play()
+
+        -- vibrate (horizontal shake that settles)
+        for i = 1, 10 do
+            if not gui.Parent then return end
+            local amp = 7 * (1 - (i - 1) / 10)
+            local dir = (i % 2 == 0) and 1 or -1
+            main.Position = UDim2.new(basePos.X.Scale, basePos.X.Offset + dir * amp,
+                basePos.Y.Scale, basePos.Y.Offset)
+            task.wait(0.035)
+        end
+        if not gui.Parent then return end
+        main.Position = basePos
+
+        -- every typed letter disappears, one by one
+        local typed = input.Text
+        local n = #typed
+        if n > 0 then
+            local delay = math.min(0.06, 0.6 / n)
+            for i = n - 1, 0, -1 do
+                if not gui.Parent then return end
+                input.Text = typed:sub(1, i)
+                task.wait(delay)
+            end
+        end
+
+        -- "Wrong Password" appears
+        local wrong = Instance.new("TextLabel")
+        wrong.Name = "WrongPassword"
+        wrong.ZIndex = 3
+        wrong.BackgroundTransparency = 1
+        wrong.Size = UDim2.fromScale(1, 1)
+        wrong.Font = Enum.Font.GothamBold
+        wrong.Text = "Wrong Password"
+        wrong.TextSize = 13
+        wrong.TextColor3 = RED
+        wrong.TextXAlignment = Enum.TextXAlignment.Center
+        wrong.Parent = input
+
+        task.wait(1)
+        if not gui.Parent then return end
+
+        -- back to the original
+        wrong:Destroy()
+        TweenService:Create(mainStroke, TweenInfo.new(0.25), {Color = Color3.new(1, 1, 1)}):Play()
+        TweenService:Create(main, TweenInfo.new(0.25), {BackgroundColor3 = C.bg}):Play()
+        local back = TweenService:Create(scale, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+            {Scale = baseScale})
+        back:Play()
+        back.Completed:Wait()
+        if not gui.Parent then return end
+        scale.Scale = targetScale()
+        if strokeGrad then strokeGrad.Enabled = true end
+        input.PlaceholderText = originalPlaceholder
+        input.TextEditable = true
+        setStatus("Enter a key to continue", C.muted)
+    end
+
     local function submit()
         if busy then return end
         local key = input.Text:match("^%s*(.-)%s*$")
@@ -527,6 +610,8 @@ local function popup(firstMessage, onKey)
                 setStatus("Verification error. Try again.", C.red)
             elseif err then
                 setStatus(err, C.red)
+                wrongKeyEffect()
+                if not gui.Parent then return end
             else
                 showSuccess()
                 return
