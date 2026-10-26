@@ -100,7 +100,6 @@ function loadExecutes() {
     if (!d._ok) { $("main").innerHTML = head("Executes", "") + '<div class="msg bad">' + esc(d.error || "Could not reach the Worker. Check the WORKER address in index.html.") + '</div>'; return; }
     $("main").innerHTML = head("Executes", "Where the script was run from. No names, no script names.")
       + '<div class="nums"><div class="num"><b>' + d.total.toLocaleString() + '</b><span>Total executes</span></div><div class="num"><b>' + d.last24h.toLocaleString() + '</b><span>Last 24 hours</span></div></div>'
-      + '<label class="box tog"><input type="checkbox" class="sw" id="multi"' + (d.multi ? " checked" : "") + '><span><b>Allow multiple executes</b><small>For testing. Off: each account runs a script once. On: scripts run every time the loadstring is executed.</small></span></label>'
       + '<div class="cols">' + list("By game", d.places, function (k) { return k ? "Place " + k : "Unknown place"; }) + list("By country", d.countries, function (k) { return k || "Unknown"; }) + '</div>';
   }).catch(function () { $("main").innerHTML = head("Executes", "") + '<div class="msg bad">Could not reach the Worker. Check the WORKER address in index.html.</div>'; });
 }
@@ -121,7 +120,7 @@ function itemHtml(s, auto) {
 function drawList() {
   if (page !== "auto" && page !== "scripts") return;
   var auto = page === "auto";
-  var h = head(auto ? "Auto execute" : "Scripts", auto ? "An enabled script runs once on each Roblox account, the next time that account runs the loadstring." : "Your saved scripts. Move one to Auto execute when it should go out to players.")
+  var h = head(auto ? "Auto execute" : "Scripts", auto ? "An enabled script runs every time anyone runs the loadstring." : "Your saved scripts. Move one to Auto execute when it should go out to players.")
     + '<div class="acts" style="margin-bottom:14px"><button class="btn" data-a="new">New script</button></div>';
   if (edit) h += '<div class="form"><input id="edName" maxlength="60" placeholder="Script name" value="' + esc(edit.label) + '" autocomplete="off">'
     + '<input id="edDesc" maxlength="120" placeholder="Short description (optional)" value="' + esc(edit.desc) + '" autocomplete="off">'
@@ -150,17 +149,11 @@ document.addEventListener("click", function (e) {
       edit = null; say("Saved.", false); return reload();
     });
   }
-  else if (a === "toggle" && s) api("/admin/scripts/auto", { id: s.id, enabled: !s.on }).then(function (d) { say(d._ok ? (s.on ? "Disabled." : "Enabled. Every account runs it once more.") : d.error, !d._ok); return reload(); });
+  else if (a === "toggle" && s) api("/admin/scripts/auto", { id: s.id, enabled: !s.on }).then(function (d) { say(d._ok ? (s.on ? "Disabled." : "Enabled. It runs on every execute.") : d.error, !d._ok); return reload(); });
   else if (a === "run" && s) { b.disabled = true; api("/admin/run", { id: s.id }).then(function (d) { b.disabled = false; say(d._ok ? "Sent \u201c" + s.label + "\u201d. Accounts that are listening run it within about 10 seconds." : d.error, !d._ok); }); }
   else if (a === "move" && s) api("/admin/scripts/move", { id: s.id, auto: !s.auto }).then(function (d) { say(d._ok ? (s.auto ? "Moved to Scripts." : "Moved to Auto execute. It stays disabled until you press Enable.") : d.error, !d._ok); return reload(); });
   else if (a === "del" && s && confirm("Delete \u201c" + s.label + "\u201d?")) api("/admin/scripts/delete", { id: s.id }).then(function () { say("Deleted.", false); return reload(); });
 });
-document.addEventListener("change", function (e) {
-  if (e.target.id !== "multi") return;
-  var box = e.target; box.disabled = true;
-  api("/admin/settings", { multi: box.checked }).then(function (d) { box.disabled = false; if (!d._ok) box.checked = !box.checked; });
-});
-
 function go(p) {
   page = p; edit = null; msg = ""; clearInterval(timer);
   document.querySelectorAll(".nav").forEach(function (x) { x.classList.toggle("on", x.dataset.p === p); });
