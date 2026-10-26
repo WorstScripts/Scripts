@@ -2,25 +2,28 @@
 local WORKER = "https://script-hub.worstasaiya.workers.dev"
 local DISCORD_URL = "https://discord.gg/WFY7f6XAh7"
 local SAVE_KEY = true
-local KEY_FILE = "WorstKey.txt"
+local KEY_FILE = "Worst.txt"
 
 if not game:IsLoaded() then game.Loaded:Wait() end
 local Players = game:GetService("Players")
 local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
 local LocalPlayer = Players.LocalPlayer
 
+-- same monochrome ash palette as the main hub (WORSTHUB.lua): near-black window, grey ash stroke,
+-- bright ash-white for the one "good" accent, warm ember for the one "bad / warning" accent.
 local C = {
-    bg = Color3.fromRGB(12,14,23),
-    surface = Color3.fromRGB(25,28,43),
-    border = Color3.fromRGB(52,55,76),
-    accent = Color3.fromRGB(167,139,250),
-    text = Color3.fromRGB(244,245,255),
-    muted = Color3.fromRGB(149,155,176),
-    green = Color3.fromRGB(74,222,128),
-    red = Color3.fromRGB(248,113,113),
-    yellow = Color3.fromRGB(251,191,36)
+    bg = Color3.fromRGB(8,8,8),
+    surface = Color3.fromRGB(14,14,14),
+    border = Color3.fromRGB(105,105,105),
+    accent = Color3.fromRGB(235,235,235),
+    text = Color3.fromRGB(242,242,242),
+    muted = Color3.fromRGB(150,150,150),
+    green = Color3.fromRGB(255,255,255),   -- success (kept the name "green" so nothing else needs renaming)
+    red = Color3.fromRGB(255,175,120),     -- error / warm ember accent (same tone the hub's glow uses)
+    yellow = Color3.fromRGB(255,175,120),  -- warning, same ember tone
 }
 
 local function send(url, body)
@@ -101,6 +104,7 @@ local function outline(obj, color)
     s.Color = color
     s.Thickness = 1
     s.Parent = obj
+    return s
 end
 local function textLabel(parent, content, size, color, bold)
     local t = Instance.new("TextLabel")
@@ -129,12 +133,95 @@ local function button(parent, label, position, size, color, foreground)
     return b
 end
 
+-- Gives a UIStroke the same black-to-white shimmer gradient that slowly spins around the main hub's
+-- window border. Returns a handle so the caller can stop it (e.g. when the popup closes).
+local function ashBorder(st, speed)
+    local g = Instance.new("UIGradient")
+    g.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0.00, Color3.fromRGB(35, 35, 35)),
+        ColorSequenceKeypoint.new(0.50, Color3.fromRGB(215, 215, 215)),
+        ColorSequenceKeypoint.new(1.00, Color3.fromRGB(35, 35, 35)),
+    })
+    g.Parent = st
+    local rot = math.random() * 360
+    local conn
+    conn = RunService.Heartbeat:Connect(function(dt)
+        if not g.Parent then conn:Disconnect() return end
+        rot = (rot + dt * (speed or 35)) % 360
+        g.Rotation = rot
+    end)
+    return conn
+end
+
+-- A handful of slow-rising ash / ember particles inside a clipped frame, the same look (toned down) as
+-- the hub's background effect. cfg.parent must clip descendants (the popup's CanvasGroup already does).
+local function emberField(parent, w, h, count)
+    local COOL = Color3.fromRGB(130, 130, 130)
+    local parts = {}
+    for i = 1, (count or 12) do
+        local f = Instance.new("Frame")
+        f.AnchorPoint = Vector2.new(0.5, 0.5)
+        f.BackgroundTransparency = 1
+        f.BorderSizePixel = 0
+        f.Size = UDim2.fromOffset(3, 3)
+        f.ZIndex = 1
+        f.Parent = parent
+        round(f, 2)
+        parts[i] = { f = f, t = 0 }
+    end
+    local function respawn(p)
+        p.t, p.life = 0, 3 + math.random() * 4
+        p.x0 = math.random(0, w)
+        p.speed = 10 + math.random() * 18
+        p.sway = 4 + math.random() * 10
+        p.phase = math.random() * 6.28
+        p.size = 2 + math.random() * 2
+        p.warm = math.random() < 0.25
+        p.col = p.warm and C.red or COOL
+    end
+    for _, p in ipairs(parts) do respawn(p) p.t = math.random() * p.life end
+    local conn
+    conn = RunService.Heartbeat:Connect(function(dt)
+        if not parent.Parent then conn:Disconnect() return end
+        dt = math.min(dt, 0.1)
+        for _, p in ipairs(parts) do
+            p.t = p.t + dt
+            if p.t >= p.life then respawn(p) end
+            local k = p.t / p.life
+            local x = p.x0 + math.sin(p.phase + p.t * 1.4) * p.sway
+            local y = h - p.speed * p.t
+            local a = math.min(k / 0.15, 1) * (1 - math.max((k - 0.4) / 0.6, 0))
+            p.f.Position = UDim2.fromOffset(x, y)
+            p.f.BackgroundColor3 = p.col
+            p.f.BackgroundTransparency = 1 - a * 0.5
+            p.f.Visible = a > 0.02 and y > -10
+        end
+    end)
+    return conn
+end
+
 local function copyDiscord()
     if type(setclipboard) == "function" then
         local ok = pcall(setclipboard, DISCORD_URL)
         return ok
     end
     return false
+end
+
+-- Best-effort: ask Roblox to open the system browser on the invite link. If the person's OS/browser has
+-- Discord's protocol registered, the browser itself offers to hand off to the Discord app from there.
+-- GuiService:OpenBrowserWindow is a protected engine call Roblox normally reserves for itself, so whether
+-- this works depends entirely on the executor - that's why it's wrapped in pcall and never assumed to work.
+local function openDiscordApp()
+    local launched = false
+    pcall(function()
+        local gs = game:GetService("GuiService")
+        if gs and typeof(gs.OpenBrowserWindow) == "function" then
+            gs:OpenBrowserWindow(DISCORD_URL)
+            launched = true
+        end
+    end)
+    return launched
 end
 
 local function popup(firstMessage, onKey)
@@ -156,17 +243,24 @@ local function popup(firstMessage, onKey)
     if old then old:Destroy() end
     gui.Parent = parent
 
+    local POPUP_W, POPUP_H = 340, 400
+
     local main = Instance.new("CanvasGroup")
     main.Name = "Main"
     main.GroupTransparency = 1
     main.AnchorPoint = Vector2.new(0.5, 0.5)
     main.Position = UDim2.fromScale(0.5, 0.5)
-    main.Size = UDim2.fromOffset(390, 440)
+    main.Size = UDim2.fromOffset(POPUP_W, POPUP_H)
     main.BackgroundColor3 = C.bg
     main.BorderSizePixel = 0
     main.Parent = gui
-    round(main, 15)
-    outline(main, C.border)
+    round(main, 22)   -- same rounding language as the hub's window (28) / panel (22), scaled down
+    local mainStroke = outline(main, Color3.new(1, 1, 1))
+    mainStroke.Thickness = 2
+    local ashConn = ashBorder(mainStroke, 35)
+
+    -- faint rising ash behind everything, same idea as the hub's background, far fewer particles
+    local emberConn = emberField(main, POPUP_W, POPUP_H, 10)
 
     local scale = Instance.new("UIScale")
     scale.Parent = main
@@ -176,7 +270,7 @@ local function popup(firstMessage, onKey)
         local camera = workspace.CurrentCamera
         if not camera then return 1 end
         local v = camera.ViewportSize
-        return math.max(0.45, math.min(1, (v.X - 24) / 390, (v.Y - 24) / 440))
+        return math.max(0.45, math.min(1, (v.X - 24) / POPUP_W, (v.Y - 24) / POPUP_H))
     end
     scale.Scale = targetScale()
     local camera = workspace.CurrentCamera
@@ -187,67 +281,101 @@ local function popup(firstMessage, onKey)
     end
     gui.Destroying:Connect(function()
         if viewportConn then viewportConn:Disconnect() end
+        if ashConn then ashConn:Disconnect() end
+        if emberConn then emberConn:Disconnect() end
     end)
 
     local header = Instance.new("Frame")
-    header.Position = UDim2.fromOffset(16, 10)
-    header.Size = UDim2.new(1, -32, 0, 53)
+    header.ZIndex = 2
+    header.Position = UDim2.fromOffset(14, 8)
+    header.Size = UDim2.new(1, -28, 0, 46)
     header.BackgroundTransparency = 1
     header.Active = true
     header.Parent = main
 
-    local logo = textLabel(header, "◆", 27, C.accent, true)
-    logo.Size = UDim2.fromOffset(30, 35)
-    local title = textLabel(header, "WORST AUTH", 17, C.text, true)
-    title.Position = UDim2.fromOffset(35, 0)
-    title.Size = UDim2.fromOffset(230, 24)
-    local subtitle = textLabel(header, "SECURE SCRIPT ACCESS", 10, C.muted)
-    subtitle.Position = UDim2.fromOffset(36, 25)
-    subtitle.Size = UDim2.fromOffset(230, 17)
+    local logo = textLabel(header, "W", 22, Color3.new(1, 1, 1), true)
+    logo.ZIndex = 2
+    logo.Size = UDim2.fromOffset(34, 34)
+    logo.TextXAlignment = Enum.TextXAlignment.Center
+    local logoGrad = Instance.new("UIGradient")
+    logoGrad.Color = ColorSequence.new(Color3.fromRGB(2, 2, 2), Color3.fromRGB(191, 191, 191))
+    logoGrad.Rotation = 90
+    logoGrad.Parent = logo
 
-    local close = button(header, "×", UDim2.new(1, -27, 0, 4), UDim2.fromOffset(27, 27), C.surface, C.muted)
-    close.TextSize = 20
+    local title = textLabel(header, 'WORST <font color="rgb(170,170,170)">AUTH</font>', 16, C.text, true)
+    title.ZIndex = 2
+    title.RichText = true
+    title.Position = UDim2.fromOffset(44, -2)
+    title.Size = UDim2.fromOffset(220, 22)
+    local subtitle = textLabel(header, "SECURE SCRIPT ACCESS", 9, C.muted)
+    subtitle.ZIndex = 2
+    subtitle.Position = UDim2.fromOffset(45, 19)
+    subtitle.Size = UDim2.fromOffset(220, 15)
+
+    local close = button(header, "×", UDim2.new(1, -24, 0, 1), UDim2.fromOffset(24, 24), C.surface, C.muted)
+    close.ZIndex = 2
+    close.TextSize = 18
     close.MouseButton1Click:Connect(function() gui:Destroy() end)
 
     local divider = Instance.new("Frame")
-    divider.Position = UDim2.fromOffset(16, 69)
-    divider.Size = UDim2.new(1, -32, 0, 1)
+    divider.ZIndex = 2
+    divider.Position = UDim2.fromOffset(14, 60)
+    divider.Size = UDim2.new(1, -28, 0, 1)
     divider.BorderSizePixel = 0
     divider.BackgroundColor3 = C.border
     divider.Parent = main
 
-    local shield = textLabel(main, "◆", 34, C.accent, true)
-    shield.Size = UDim2.fromOffset(62, 62)
-    shield.AnchorPoint = Vector2.new(0.5, 0)
-    shield.Position = UDim2.new(0.5, 0, 0, 88)
-    shield.BackgroundTransparency = 0
-    shield.BackgroundColor3 = C.surface
-    shield.TextXAlignment = Enum.TextXAlignment.Center
-    round(shield, 31)
+    -- circular ash badge, same construction as the hub's icon badges (gradient disc + glyph)
+    local badge = Instance.new("Frame")
+    badge.ZIndex = 2
+    badge.AnchorPoint = Vector2.new(0.5, 0)
+    badge.Position = UDim2.new(0.5, 0, 0, 74)
+    badge.Size = UDim2.fromOffset(54, 54)
+    badge.BackgroundColor3 = C.surface
+    badge.BorderSizePixel = 0
+    badge.Parent = main
+    do
+        local c = Instance.new("UICorner")
+        c.CornerRadius = UDim.new(1, 0)
+        c.Parent = badge
+    end
+    local badgeGrad = Instance.new("UIGradient")
+    badgeGrad.Color = ColorSequence.new(Color3.fromRGB(51, 51, 51), Color3.fromRGB(33, 33, 33))
+    badgeGrad.Rotation = 90
+    badgeGrad.Parent = badge
+    outline(badge, C.border)
+    local badgeGlyph = textLabel(badge, "W", 20, C.text, true)
+    badgeGlyph.ZIndex = 2
+    badgeGlyph.Size = UDim2.fromScale(1, 1)
+    badgeGlyph.TextXAlignment = Enum.TextXAlignment.Center
 
-    local heading = textLabel(main, "Authentication Required", 19, C.text, true)
-    heading.Position = UDim2.fromOffset(15, 163)
-    heading.Size = UDim2.new(1, -30, 0, 27)
+    local heading = textLabel(main, "Authentication Required", 17, C.text, true)
+    heading.ZIndex = 2
+    heading.Position = UDim2.fromOffset(14, 140)
+    heading.Size = UDim2.new(1, -28, 0, 24)
     heading.TextXAlignment = Enum.TextXAlignment.Center
-    local description = textLabel(main, "Enter your license key to unlock WORST Hub.", 12, C.muted)
-    description.Position = UDim2.fromOffset(15, 193)
-    description.Size = UDim2.new(1, -30, 0, 20)
+    local description = textLabel(main, "Enter your license key to unlock WORST Hub.", 11, C.muted)
+    description.ZIndex = 2
+    description.Position = UDim2.fromOffset(14, 164)
+    description.Size = UDim2.new(1, -28, 0, 18)
     description.TextXAlignment = Enum.TextXAlignment.Center
 
-    local keyLabel = textLabel(main, "LICENSE KEY", 11, C.text, true)
-    keyLabel.Position = UDim2.fromOffset(25, 227)
-    keyLabel.Size = UDim2.new(1, -50, 0, 18)
+    local keyLabel = textLabel(main, "LICENSE KEY", 10, C.text, true)
+    keyLabel.ZIndex = 2
+    keyLabel.Position = UDim2.fromOffset(22, 196)
+    keyLabel.Size = UDim2.new(1, -44, 0, 16)
 
     local input = Instance.new("TextBox")
-    input.Position = UDim2.fromOffset(25, 250)
-    input.Size = UDim2.new(1, -50, 0, 43)
+    input.ZIndex = 2
+    input.Position = UDim2.fromOffset(22, 216)
+    input.Size = UDim2.new(1, -44, 0, 40)
     input.BackgroundColor3 = C.surface
     input.BorderSizePixel = 0
     input.PlaceholderText = "WORST-XXXX-XXXX-XXXX"
     input.PlaceholderColor3 = C.muted
     input.Text = ""
     input.TextColor3 = C.text
-    input.TextSize = 13
+    input.TextSize = 12
     input.Font = Enum.Font.Code
     input.ClearTextOnFocus = false
     input.Parent = main
@@ -258,13 +386,16 @@ local function popup(firstMessage, onKey)
     pad.PaddingRight = UDim.new(0, 12)
     pad.Parent = input
 
-    local verify = button(main, "VERIFY KEY", UDim2.fromOffset(25, 303), UDim2.new(1, -50, 0, 43), C.accent, C.bg)
-    local discord = button(main, "COPY DISCORD INVITE", UDim2.fromOffset(25, 354), UDim2.new(1, -50, 0, 43), C.surface, C.text)
+    local verify = button(main, "VERIFY KEY", UDim2.fromOffset(22, 266), UDim2.new(1, -44, 0, 40), C.accent, C.bg)
+    verify.ZIndex = 2
+    local discord = button(main, "JOIN DISCORD", UDim2.fromOffset(22, 314), UDim2.new(1, -44, 0, 40), C.surface, C.text)
+    discord.ZIndex = 2
     outline(discord, C.border)
 
     local status = textLabel(main, "●  " .. (firstMessage or "Enter a key to continue"), 11, firstMessage and C.yellow or C.muted)
-    status.Position = UDim2.fromOffset(25, 408)
-    status.Size = UDim2.new(1, -50, 0, 25)
+    status.ZIndex = 2
+    status.Position = UDim2.fromOffset(22, 364)
+    status.Size = UDim2.new(1, -44, 0, 24)
     status.TextWrapped = true
     status.TextTruncate = Enum.TextTruncate.AtEnd
     local function setStatus(message, color)
@@ -273,11 +404,20 @@ local function popup(firstMessage, onKey)
         status.TextColor3 = color or C.muted
     end
 
+    -- "JOIN DISCORD": copies the invite AND tries to hand off straight to the Discord app at the same time.
+    -- The hand-off is best-effort (see openDiscordApp above) so the status line always reflects what
+    -- actually happened rather than promising something that may not work on every executor.
     discord.MouseButton1Click:Connect(function()
-        if copyDiscord() then
-            setStatus("Discord invite copied to clipboard!", C.green)
+        local copied = copyDiscord()
+        local launched = openDiscordApp()
+        if copied and launched then
+            setStatus("Invite copied - opening Discord...", C.green)
+        elseif launched then
+            setStatus("Opening Discord...", C.green)
+        elseif copied then
+            setStatus("Copied! Paste it in Discord: " .. DISCORD_URL, C.green)
         else
-            setStatus("Clipboard unavailable: " .. DISCORD_URL, C.yellow)
+            setStatus("Couldn't copy or open automatically: " .. DISCORD_URL, C.yellow)
         end
     end)
 
