@@ -4,64 +4,111 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Script</title>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#10131a;--panel:#171c26;--line:#262e3d;--text:#e9edf4;--mute:#8a95a8;--acc:#a99bff;--ok:#6fd6a4;--bad:#ff8a8a}
+:root{--ink:#070b14;--slate:#0e1522;--edge:#1c2536;--text:#e6ebf5;--mute:#8793aa;--blue:#3d9be9;--ok:#4fd18b;--bad:#ff7b7b;--mono:"JetBrains Mono",ui-monospace,Consolas,monospace}
 *{box-sizing:border-box}
-html,body{margin:0;height:100%}
-body{background:var(--bg);color:var(--text);font:15px/1.5 Manrope,system-ui,sans-serif;display:flex}
+html,body{margin:0;min-height:100%}
+html{background:#050b16}
+body{background:transparent;color:var(--text);font:15px/1.55 "Instrument Sans",system-ui,sans-serif}
 button,input,textarea{font:inherit;color:inherit}
-:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
-aside{width:210px;flex:none;border-right:1px solid var(--line);padding:22px 14px}
-aside h1{font-size:17px;font-weight:800;margin:0 8px 14px}
-.nav{display:block;width:100%;text-align:left;background:none;border:0;border-radius:8px;padding:9px 12px;color:var(--mute);cursor:pointer}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+header{display:flex;justify-content:center;padding:20px 16px 0}
+.pill{display:flex;gap:4px;padding:5px;border:1px solid var(--edge);border-radius:99px;background:var(--slate)}
+.nav{background:none;border:0;border-radius:99px;padding:7px 18px;color:var(--mute);cursor:pointer;font-weight:500}
 .nav:hover{color:var(--text)}
-.nav.on{background:var(--panel);color:var(--text);box-shadow:inset 3px 0 0 var(--acc)}
-main{flex:1;min-width:0;padding:30px clamp(16px,4vw,48px);overflow:auto;max-width:960px}
-h2{font-size:22px;font-weight:800;margin:0 0 4px}
-.sub{color:var(--mute);margin:0 0 22px}
-.nums{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:26px}
-.num{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 22px}
-.num b{display:block;font-size:44px;line-height:1.1;font-weight:800;font-variant-numeric:tabular-nums}
-.num span{color:var(--mute)}
-.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
-.box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
-.box h3{margin:0 0 8px;font-size:15px}
-.row{display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
-.row:first-of-type{border-top:0}
-.btn{background:var(--acc);color:#14112b;border:0;border-radius:8px;padding:8px 14px;font-weight:600;cursor:pointer}
-.btn.ghost{background:none;border:1px solid var(--line);color:var(--text)}
-.btn.ok{background:var(--ok);color:#0c2318}
+.nav.on{background:var(--blue);color:#06121f;font-weight:600}
+main{max-width:880px;margin:0 auto;padding:40px 20px 90px}
+h2{font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1.15;margin:0 0 8px}
+.sub{color:var(--mute);margin:0 0 28px;max-width:60ch}
+.tally{font-size:20px;margin:0 0 34px}
+.tally b{font:600 22px var(--mono);color:var(--blue);font-variant-numeric:tabular-nums}
+.ledgers{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:30px}
+.led h3{font-size:15px;font-weight:600;margin:0 0 10px}
+.lr{position:relative;display:flex;justify-content:space-between;gap:12px;padding:7px 10px;margin-bottom:3px;font-size:14px;overflow:hidden;border-radius:6px}
+.lr i{position:absolute;inset:0 auto 0 0;background:rgba(61,155,233,.2);border-radius:6px}
+.lr span{position:relative}
+.lr .k{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lr .n{font-family:var(--mono);color:var(--mute);font-variant-numeric:tabular-nums}
+.bar{margin-bottom:20px}
+.rows{border-top:1px solid var(--edge)}
+.item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;align-items:center;padding:16px 0;border-bottom:1px solid var(--edge)}
+.item .name{font-weight:600;font-size:16px}
+.item small{display:block;color:var(--mute)}
+.acts{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.item .more{grid-column:1/-1}
+.btn{background:var(--blue);color:#06121f;border:0;border-radius:8px;padding:8px 16px;font-weight:600;cursor:pointer}
+.btn:hover{filter:brightness(1.1)}
+.btn.ghost{background:none;border:1px solid var(--edge);color:var(--mute);font-weight:500}
+.btn.ghost:hover{color:var(--text);border-color:var(--mute);filter:none}
+.btn.del:hover{color:var(--bad);border-color:var(--bad)}
+.item .btn{padding:5px 12px;font-size:13px}
+.item .right .btn{font-size:14px;padding:7px 18px}
 .btn:disabled{opacity:.5;cursor:default}
-.item{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px}
-.item .top{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.item b{font-size:16px}
-.tag{font-size:12px;font-weight:600;border-radius:99px;padding:2px 9px;border:1px solid var(--line);color:var(--mute)}
-.tag.on{color:var(--ok);border-color:var(--ok)}
-.item small{display:block;color:var(--mute);margin:2px 0 10px}
-.acts{display:flex;gap:8px;flex-wrap:wrap}
-.form{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px;display:grid;gap:10px}
-.form input,.form textarea{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 11px;width:100%}
-.form textarea{min-height:200px;font-family:ui-monospace,Consolas,monospace;font-size:13px;resize:vertical}
-.msg{min-height:22px;color:var(--mute);margin-top:6px}.msg.bad{color:var(--bad)}
-.tog{display:flex;gap:14px;align-items:center;margin-bottom:26px;cursor:pointer}
-.tog small{display:block;color:var(--mute);font-weight:400}
-.sw{appearance:none;-webkit-appearance:none;width:42px;height:24px;border-radius:99px;background:var(--line);position:relative;cursor:pointer;transition:background .15s;flex:none;margin:0}
+.state{font-size:13px;color:var(--mute)}.state.on{color:var(--ok)}
+.sw{appearance:none;-webkit-appearance:none;border:0;width:44px;height:24px;border-radius:99px;background:var(--edge);position:relative;cursor:pointer;transition:background .15s;flex:none;padding:0}
 .sw::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--text);transition:transform .15s}
-.sw:checked{background:var(--acc)}.sw:checked::after{transform:translateX(18px);background:#14112b}
-.sw:disabled{opacity:.5}
-.empty{color:var(--mute);padding:18px 4px}
-@media(max-width:700px){body{flex-direction:column}aside{width:100%;border:0;border-bottom:1px solid var(--line);padding:14px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}aside h1{margin:0 8px 0 0}.nav{width:auto}.nav.on{box-shadow:inset 0 -3px 0 var(--acc)}}
+.sw[aria-checked="true"]{background:var(--ok)}
+.sw[aria-checked="true"]::after{transform:translateX(20px);background:#06210f}
+.form{background:var(--slate);border:1px solid var(--edge);border-radius:12px;padding:16px;margin-bottom:24px;display:grid;gap:10px}
+.form input,.form textarea{background:var(--ink);border:1px solid var(--edge);border-radius:8px;padding:10px 12px;width:100%}
+.form input:focus,.form textarea:focus{border-color:var(--blue);outline:0}
+.form textarea{min-height:240px;font:13px/1.6 var(--mono);resize:vertical;tab-size:2}
+.msg{min-height:22px;color:var(--mute);margin-top:20px}.msg.bad{color:var(--bad)}
+.empty{color:var(--mute);padding:24px 0}
+@media(max-width:600px){h2{font-size:25px}.item{grid-template-columns:1fr}.item .right{justify-content:space-between}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* ===== Visuals from worst.html: video wallpaper, glass, glow, motion ===== */
+#bg{position:fixed;inset:0;z-index:-1;background:#050b16 center/cover no-repeat}
+#bg video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 1.2s}
+#bg video.on{opacity:1}
+#bg::after{content:"";position:absolute;inset:0;background:linear-gradient(rgba(5,11,22,.5),rgba(5,11,22,.72))}
+.pill{background:rgba(0,0,0,.30);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-color:rgba(255,255,255,.12);box-shadow:0 12px 36px rgba(0,0,0,.16)}
+.nav{transition:color .15s,background .2s,box-shadow .2s,transform .15s}
+.nav:hover{transform:translateY(-1px)}
+.nav.on{box-shadow:0 0 14px rgba(61,155,233,.65)}
+main{animation:lifeUp .45s both}
+h2{text-shadow:0 0 10px #4cc3ff,0 0 26px #2d9be0,0 0 50px rgba(45,155,224,.7)}
+.sub{text-shadow:0 1px 3px rgba(0,0,0,.9)}
+.tally b{text-shadow:0 0 8px currentColor,0 0 18px currentColor}
+.led,.rows,.form{-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.led{background:rgba(0,0,0,.30);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:16px;box-shadow:0 12px 36px rgba(0,0,0,.16);animation:lifeUp .5s both}
+.led:nth-child(2){animation-delay:.08s}.led:nth-child(3){animation-delay:.16s}
+.lr i{transform-origin:left;animation:barGrow .7s cubic-bezier(.2,.8,.2,1) both;box-shadow:0 0 10px rgba(61,155,233,.45)}
+.lr{transition:transform .15s,background .2s}
+.lr:hover{transform:translateX(4px);background:rgba(255,255,255,.05)}
+.rows{background:rgba(0,0,0,.30);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:0 18px;box-shadow:0 12px 36px rgba(0,0,0,.16)}
+.rows .item:last-child{border-bottom:0}
+.item{animation:lifeUp .4s both;transition:transform .15s}
+.item:nth-child(2){animation-delay:.05s}.item:nth-child(3){animation-delay:.1s}.item:nth-child(4){animation-delay:.15s}.item:nth-child(n+5){animation-delay:.2s}
+.item:hover{transform:translateX(4px)}
+.item .name{text-shadow:0 0 8px rgba(120,200,255,.5)}
+.btn{transition:transform .15s,filter .15s,background .2s,box-shadow .2s,border-color .2s,color .2s;box-shadow:0 0 10px rgba(61,155,233,.35)}
+.btn:hover{transform:translateY(-2px);box-shadow:0 0 16px rgba(61,155,233,.65)}
+.btn:active{transform:scale(.96)}
+.btn.ghost{box-shadow:none;background:rgba(0,0,0,.25)}
+.btn.ghost:hover{box-shadow:none}
+.state.on{text-shadow:0 0 8px currentColor}
+.sw[aria-checked="true"]{box-shadow:0 0 12px rgba(79,209,139,.55)}
+.form{background:rgba(0,0,0,.38);border-color:rgba(255,255,255,.12);box-shadow:0 12px 36px rgba(0,0,0,.16);animation:lifeUp .3s both}
+.form input,.form textarea{background:rgba(0,0,0,.38);transition:border-color .2s,box-shadow .2s}
+.form input:focus,.form textarea:focus{box-shadow:0 0 0 3px rgba(61,155,233,.2)}
+.msg,.empty{text-shadow:0 1px 3px rgba(0,0,0,.9)}
+@keyframes lifeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes barGrow{from{transform:scaleX(0)}to{transform:none}}
+@media(prefers-reduced-motion:reduce){main,.led,.item,.form,.lr i{animation:none!important}#bg video{display:none}}
 </style>
 </head>
 <body>
-<aside>
-  <h1>Script</h1>
-  <button class="nav" data-p="scripts">Scripts</button>
-  <button class="nav on" data-p="executes">Executes</button>
-  <button class="nav" data-p="auto">Auto execute</button>
-</aside>
+<div id="bg" aria-hidden="true"><video muted loop autoplay playsinline preload="auto"></video></div>
+<header>
+  <nav class="pill" aria-label="Pages">
+    <button class="nav" data-p="executes">Executes</button>
+    <button class="nav" data-p="scripts">Scripts</button>
+    <button class="nav" data-p="auto">Auto execute</button>
+  </nav>
+</header>
 <main id="main"></main>
 <script>
 // Put your Cloudflare Worker address here (no slash at the end).
@@ -92,16 +139,19 @@ function say(t, b) { msg = t; bad = !!b; var m = $("msg"); if (m) { m.textConten
 
 /* ---------- Executes ---------- */
 function list(title, rows, fmt) {
-  return '<div class="box"><h3>' + title + '</h3>' + (rows.length ? rows.map(function (r) { return '<div class="row"><span>' + esc(fmt(r.k)) + '</span><span>' + r.n.toLocaleString() + '</span></div>'; }).join("") : '<div class="empty">Nothing yet.</div>') + '</div>';
+  var max = rows.reduce(function (m, r) { return Math.max(m, r.n); }, 1);
+  return '<section class="led"><h3>' + title + '</h3>' + (rows.length ? rows.map(function (r) {
+    return '<div class="lr"><i style="width:' + Math.round(r.n / max * 100) + '%"></i><span class="k">' + esc(fmt(r.k)) + '</span><span class="n">' + r.n.toLocaleString() + '</span></div>';
+  }).join("") : '<div class="empty">Nothing yet.</div>') + '</section>';
 }
 function loadExecutes() {
   api("/admin/executes").then(function (d) {
     if (page !== "executes") return;
-    if (!d._ok) { $("main").innerHTML = head("Executes", "") + '<div class="msg bad">' + esc(d.error || "Could not reach the Worker. Check the WORKER address in index.html.") + '</div>'; return; }
-    $("main").innerHTML = head("Executes", "Where the script was run from. No names, no script names.")
-      + '<div class="nums"><div class="num"><b>' + d.total.toLocaleString() + '</b><span>Total executes</span></div><div class="num"><b>' + d.last24h.toLocaleString() + '</b><span>Last 24 hours</span></div></div>'
-      + '<div class="cols">' + list("By game", d.places, function (k) { return k ? "Place " + k : "Unknown place"; }) + list("By country", d.countries, function (k) { return k || "Unknown"; }) + list("By executor", d.executors || [], function (k) { return k || "Unknown"; }) + '</div>';
-  }).catch(function () { $("main").innerHTML = head("Executes", "") + '<div class="msg bad">Could not reach the Worker. Check the WORKER address in index.html.</div>'; });
+    if (!d._ok) { $("main").innerHTML = head("Executes", "") + '<div class="msg bad">' + esc(d.error || "Could not reach the Worker. Check the WORKER address in worstsite.html.") + '</div>'; return; }
+    $("main").innerHTML = head("Executes", "Where the loadstring was run from. Counts only, no names.")
+      + '<p class="tally"><b>' + d.total.toLocaleString() + '</b> executes in total, <b>' + d.last24h.toLocaleString() + '</b> in the last 24 hours.</p>'
+      + '<div class="ledgers">' + list("By game", d.places, function (k) { return k ? "Place " + k : "Unknown place"; }) + list("By country", d.countries, function (k) { return k || "Unknown"; }) + list("By executor", d.executors || [], function (k) { return k || "Unknown"; }) + '</div>';
+  }).catch(function () { $("main").innerHTML = head("Executes", "") + '<div class="msg bad">Could not reach the Worker. Check the WORKER address in worstsite.html.</div>'; });
 }
 
 /* ---------- Scripts + Auto execute ---------- */
@@ -109,27 +159,28 @@ function head(t, s) { return '<h2>' + t + '</h2><p class="sub">' + s + '</p>'; }
 function loadScripts() { return api("/admin/scripts").then(function (d) { scripts = d._ok ? d.scripts : []; if (!d._ok) say(d.error || "Could not load scripts.", true); }); }
 function itemHtml(s, auto) {
   var id = ' data-id="' + esc(s.id) + '"';
-  return '<div class="item"><div class="top"><b>' + esc(s.label) + '</b>' + (auto ? '<span class="tag' + (s.on ? " on" : "") + '">' + (s.on ? "Enabled" : "Disabled") + '</span>' : "") + '</div>'
-    + '<small>' + esc(s.desc || "No description") + '</small><div class="acts">'
-    + (auto ? "" : '<button class="btn" data-a="run"' + id + '>Run</button>')
-    + (auto ? '<button class="btn ' + (s.on ? "ghost" : "ok") + '" data-a="toggle"' + id + '>' + (s.on ? "Disable" : "Enable") + '</button>' : "")
-    + '<button class="btn ghost" data-a="edit"' + id + '>Edit</button>'
-    + '<button class="btn ghost" data-a="del"' + id + '>Delete</button>'
-    + '<button class="btn ghost" data-a="move"' + id + '>' + (auto ? "Move to Scripts" : "Move to Auto execute") + '</button></div></div>';
+  var right = auto
+    ? '<span class="state' + (s.on ? " on" : "") + '">' + (s.on ? "Live" : "Off") + '</span><button type="button" class="sw" role="switch" aria-checked="' + (s.on ? "true" : "false") + '" aria-label="Auto execute ' + esc(s.label) + '" data-a="toggle"' + id + '></button>'
+    : '<button class="btn" data-a="run"' + id + '>Run</button>';
+  return '<div class="item"><div><div class="name">' + esc(s.label) + '</div><small>' + esc(s.desc || "No description") + '</small></div>'
+    + '<div class="acts right">' + right + '</div>'
+    + '<div class="acts more"><button class="btn ghost" data-a="edit"' + id + '>Edit</button>'
+    + '<button class="btn ghost" data-a="move"' + id + '>' + (auto ? "Move to Scripts" : "Move to Auto execute") + '</button>'
+    + '<button class="btn ghost del" data-a="del"' + id + '>Delete</button></div></div>';
 }
 function drawList() {
   if (page !== "auto" && page !== "scripts") return;
   var auto = page === "auto";
-  var h = head(auto ? "Auto execute" : "Scripts", auto ? "An enabled script runs every time anyone runs the loadstring." : "Your saved scripts. Move one to Auto execute when it should go out to players.")
-    + '<div class="acts" style="margin-bottom:14px"><button class="btn" data-a="new">New script</button></div>';
+  var h = head(auto ? "Auto execute" : "Scripts", auto ? "A live script runs every time anyone runs the loadstring." : "Your saved scripts. Move one to Auto execute when it should go out to players.")
+    + '<div class="bar"><button class="btn" data-a="new">New script</button></div>';
   if (edit) h += '<div class="form"><input id="edName" maxlength="60" placeholder="Script name" value="' + esc(edit.label) + '" autocomplete="off">'
     + '<input id="edDesc" maxlength="120" placeholder="Short description (optional)" value="' + esc(edit.desc) + '" autocomplete="off">'
-    + '<textarea id="edCode" spellcheck="false" placeholder="-- paste your Lua here">' + esc(edit.code) + '</textarea>'
+    + '<textarea id="edCode" spellcheck="false" wrap="off" placeholder="-- paste your Lua here">' + esc(edit.code) + '</textarea>'
     + '<div class="acts"><button class="btn" data-a="save">Save script</button><button class="btn ghost" data-a="cancel">Cancel</button></div></div>';
   var items = (scripts || []).filter(function (s) { return s.auto === auto; });
   if (scripts === null) h += '<div class="empty">Loading…</div>';
-  else if (!items.length && !edit) h += '<div class="empty">' + (auto ? "No scripts here yet. Move one from Scripts, or press New script. Saved scripts stay off until you press Enable." : "No scripts yet. Press New script and paste one in.") + '</div>';
-  else h += items.map(function (s) { return itemHtml(s, auto); }).join("");
+  else if (!items.length && !edit) h += '<div class="empty">' + (auto ? "No scripts here yet. Move one from Scripts, or press New script. Saved scripts stay off until you switch them on." : "No scripts yet. Press New script and paste one in.") + '</div>';
+  else h += '<div class="rows">' + items.map(function (s) { return itemHtml(s, auto); }).join("") + '</div>';
   $("main").innerHTML = h + '<div class="msg' + (bad ? " bad" : "") + '" id="msg">' + esc(msg) + '</div>';
 }
 function find(id) { return (scripts || []).filter(function (s) { return s.id === id; })[0]; }
@@ -149,11 +200,12 @@ document.addEventListener("click", function (e) {
       edit = null; say("Saved.", false); return reload();
     });
   }
-  else if (a === "toggle" && s) api("/admin/scripts/auto", { id: s.id, enabled: !s.on }).then(function (d) { say(d._ok ? (s.on ? "Disabled." : "Enabled. It runs on every execute.") : d.error, !d._ok); return reload(); });
+  else if (a === "toggle" && s) api("/admin/scripts/auto", { id: s.id, enabled: !s.on }).then(function (d) { say(d._ok ? (s.on ? "Switched off." : "Live. It runs on every execute.") : d.error, !d._ok); return reload(); });
   else if (a === "run" && s) { b.disabled = true; api("/admin/run", { id: s.id }).then(function (d) { b.disabled = false; say(d._ok ? "Sent \u201c" + s.label + "\u201d. Accounts that are listening run it within about 10 seconds." : d.error, !d._ok); }); }
-  else if (a === "move" && s) api("/admin/scripts/move", { id: s.id, auto: !s.auto }).then(function (d) { say(d._ok ? (s.auto ? "Moved to Scripts." : "Moved to Auto execute. It stays disabled until you press Enable.") : d.error, !d._ok); return reload(); });
+  else if (a === "move" && s) api("/admin/scripts/move", { id: s.id, auto: !s.auto }).then(function (d) { say(d._ok ? (s.auto ? "Moved to Scripts." : "Moved to Auto execute. It stays off until you switch it on.") : d.error, !d._ok); return reload(); });
   else if (a === "del" && s && confirm("Delete \u201c" + s.label + "\u201d?")) api("/admin/scripts/delete", { id: s.id }).then(function () { say("Deleted.", false); return reload(); });
 });
+
 function go(p) {
   page = p; edit = null; msg = ""; clearInterval(timer);
   document.querySelectorAll(".nav").forEach(function (x) { x.classList.toggle("on", x.dataset.p === p); });
@@ -162,6 +214,20 @@ function go(p) {
   else { drawList(); reload(); }
 }
 go(location.hash === "#auto" ? "auto" : location.hash === "#scripts" ? "scripts" : "executes");
+</script>
+<script>
+// Background (same as worst.html): still image first, the video fades in over it. Video is PC only and skipped for reduced motion.
+(function () {
+  var bg = document.getElementById("bg"), v = bg.querySelector("video");
+  bg.style.backgroundImage = 'url("https://cdn.jsdelivr.net/gh/WORSTAsaiya/ASAIYASITE@main/WWORST.png")';
+  var pc = window.matchMedia && matchMedia("(hover:hover) and (pointer:fine) and (min-width:761px)").matches;
+  var calm = window.matchMedia && matchMedia("(prefers-reduced-motion:reduce)").matches;
+  if (!pc || calm) { v.removeAttribute("autoplay"); return; }
+  v.muted = true;
+  v.addEventListener("playing", function () { v.classList.add("on"); });
+  v.src = "https://cdn.jsdelivr.net/gh/WORSTAsaiya/ASAIYASITE@main/calc-pc.mp4";
+  var p = v.play(); if (p && p.catch) p.catch(function () {});
+})();
 </script>
 </body>
 </html>
