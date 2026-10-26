@@ -1,3 +1,4 @@
+print("Executed")
 -- Script hub loader. Shows an [Enter key] popup, checks the key with the Worker, then runs your enabled auto execute scripts.
 
 local WORKER   = "https://script-hub.worstasaiya.workers.dev"
