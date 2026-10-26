@@ -58,7 +58,7 @@ h2{font-size:22px;font-weight:800;margin:0 0 4px}
 <main id="main"></main>
 <script>
 // Put your Cloudflare Worker address here (no slash at the end).
-var WORKER = "https://YOUR-WORKER.YOUR-SUBDOMAIN.workers.dev";
+var WORKER = "https://script-hub.worstasaiya.workers.dev";
 
 var page = "executes", scripts = null, edit = null, msg = "", bad = false, timer = 0;
 var $ = function (id) { return document.getElementById(id); };
