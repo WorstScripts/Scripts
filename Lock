@@ -1,139 +1,138 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Script</title>
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;800&display=swap" rel="stylesheet">
-<style>
-:root{--bg:#10131a;--panel:#171c26;--line:#262e3d;--text:#e9edf4;--mute:#8a95a8;--acc:#a99bff;--ok:#6fd6a4;--bad:#ff8a8a}
-*{box-sizing:border-box}
-html,body{margin:0;height:100%}
-body{background:var(--bg);color:var(--text);font:15px/1.5 Manrope,system-ui,sans-serif;display:flex}
-button,input,textarea{font:inherit;color:inherit}
-:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
-aside{width:210px;flex:none;border-right:1px solid var(--line);padding:22px 14px}
-aside h1{font-size:17px;font-weight:800;margin:0 8px 14px}
-.nav{display:block;width:100%;text-align:left;background:none;border:0;border-radius:8px;padding:9px 12px;color:var(--mute);cursor:pointer}
-.nav:hover{color:var(--text)}
-.nav.on{background:var(--panel);color:var(--text);box-shadow:inset 3px 0 0 var(--acc)}
-main{flex:1;min-width:0;padding:30px clamp(16px,4vw,48px);overflow:auto;max-width:960px}
-h2{font-size:22px;font-weight:800;margin:0 0 4px}
-.sub{color:var(--mute);margin:0 0 22px}
-.nums{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:26px}
-.num{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:20px 22px}
-.num b{display:block;font-size:44px;line-height:1.1;font-weight:800;font-variant-numeric:tabular-nums}
-.num span{color:var(--mute)}
-.cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
-.box{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
-.box h3{margin:0 0 8px;font-size:15px}
-.row{display:flex;justify-content:space-between;padding:5px 0;border-top:1px solid var(--line);font-variant-numeric:tabular-nums}
-.row:first-of-type{border-top:0}
-.btn{background:var(--acc);color:#14112b;border:0;border-radius:8px;padding:8px 14px;font-weight:600;cursor:pointer}
-.btn.ghost{background:none;border:1px solid var(--line);color:var(--text)}
-.btn.ok{background:var(--ok);color:#0c2318}
-.btn:disabled{opacity:.5;cursor:default}
-.item{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:10px}
-.item .top{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-.item b{font-size:16px}
-.tag{font-size:12px;font-weight:600;border-radius:99px;padding:2px 9px;border:1px solid var(--line);color:var(--mute)}
-.tag.on{color:var(--ok);border-color:var(--ok)}
-.item small{display:block;color:var(--mute);margin:2px 0 10px}
-.acts{display:flex;gap:8px;flex-wrap:wrap}
-.form{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px;display:grid;gap:10px}
-.form input,.form textarea{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 11px;width:100%}
-.form textarea{min-height:200px;font-family:ui-monospace,Consolas,monospace;font-size:13px;resize:vertical}
-.msg{min-height:22px;color:var(--mute);margin-top:6px}.msg.bad{color:var(--bad)}
-.empty{color:var(--mute);padding:18px 4px}
-@media(max-width:700px){body{flex-direction:column}aside{width:100%;border:0;border-bottom:1px solid var(--line);padding:14px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}aside h1{margin:0 8px 0 0}.nav{width:auto}.nav.on{box-shadow:inset 0 -3px 0 var(--acc)}}
-@media(prefers-reduced-motion:reduce){*{transition:none!important}}
-</style>
-</head>
-<body>
-<aside>
-  <h1>Script</h1>
-  <button class="nav on" data-p="executes">Executes</button>
-  <button class="nav" data-p="auto">Auto execute</button>
-</aside>
-<main id="main"></main>
-<script>
-// Put your Cloudflare Worker address here (no slash at the end).
-var WORKER = "https://script-hub.worstasaiya.workers.dev";
+-- Script hub loader. Shows an [Enter key] popup, checks the key with the Worker, then runs your enabled auto execute scripts.
 
-var page = "executes", scripts = null, edit = null, msg = "", bad = false, timer = 0;
-var $ = function (id) { return document.getElementById(id); };
-function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
-function api(path, body) {
-  var o = { cache: "no-store", headers: { "x-admin-key": sessionStorage.getItem("pw") || "" } };
-  if (body) { o.method = "POST"; o.headers["Content-Type"] = "application/json"; o.body = JSON.stringify(body); }
-  return fetch(WORKER + path, o).then(function (r) { return r.json().then(function (d) { d._ok = r.ok; return d; }); });
-}
-function say(t, b) { msg = t; bad = !!b; var m = $("msg"); if (m) { m.textContent = t; m.className = "msg" + (b ? " bad" : ""); } }
+local WORKER   = "https://script-hub.worstasaiya.workers.dev"
+local SAVE_KEY = true  -- true: remember a correct key on this PC so it isn't asked every time. false: always ask.
+local KEY_FILE = "scripthub_key.txt"
 
-/* ---------- Executes ---------- */
-function list(title, rows, fmt) {
-  return '<div class="box"><h3>' + title + '</h3>' + (rows.length ? rows.map(function (r) { return '<div class="row"><span>' + esc(fmt(r.k)) + '</span><span>' + r.n.toLocaleString() + '</span></div>'; }).join("") : '<div class="empty">Nothing yet.</div>') + '</div>';
-}
-function loadExecutes() {
-  api("/admin/executes").then(function (d) {
-    if (page !== "executes") return;
-    if (!d._ok) { $("main").innerHTML = head("Executes", "") + '<div class="msg bad">' + esc(d.error || "Could not reach the Worker. Check the WORKER address in index.html.") + '</div>'; return; }
-    $("main").innerHTML = head("Executes", "Where the script was run from. No names, no script names.")
-      + '<div class="nums"><div class="num"><b>' + d.total.toLocaleString() + '</b><span>Total executes</span></div><div class="num"><b>' + d.last24h.toLocaleString() + '</b><span>Last 24 hours</span></div></div>'
-      + '<div class="cols">' + list("By game", d.places, function (k) { return k ? "Place " + k : "Unknown place"; }) + list("By country", d.countries, function (k) { return k || "Unknown"; }) + '</div>';
-  }).catch(function () { $("main").innerHTML = head("Executes", "") + '<div class="msg bad">Could not reach the Worker. Check the WORKER address in index.html.</div>'; });
-}
+if not game:IsLoaded() then game.Loaded:Wait() end
 
-/* ---------- Auto execute ---------- */
-function head(t, s) { return '<h2>' + t + '</h2><p class="sub">' + s + '</p>'; }
-function loadScripts() { return api("/admin/scripts").then(function (d) { scripts = d._ok ? d.scripts : []; if (!d._ok) say(d.error || "Could not load scripts.", true); }); }
-function drawAuto() {
-  if (page !== "auto") return;
-  var h = head("Auto execute", "An enabled script runs once on each Roblox account, the next time that account runs the loadstring.")
-    + '<div class="acts" style="margin-bottom:14px"><button class="btn" data-a="new">New script</button></div>';
-  if (edit) h += '<div class="form"><input id="edName" maxlength="60" placeholder="Script name" value="' + esc(edit.label) + '" autocomplete="off">'
-    + '<input id="edDesc" maxlength="120" placeholder="Short description (optional)" value="' + esc(edit.desc) + '" autocomplete="off">'
-    + '<textarea id="edCode" spellcheck="false" placeholder="-- paste your Lua here">' + esc(edit.code) + '</textarea>'
-    + '<div class="acts"><button class="btn" data-a="save">Save script</button><button class="btn ghost" data-a="cancel">Cancel</button></div></div>';
-  if (scripts === null) h += '<div class="empty">Loading…</div>';
-  else if (!scripts.length && !edit) h += '<div class="empty">No scripts yet. Press New script and paste one in. Saved scripts stay off until you press Enable.</div>';
-  else h += scripts.map(function (s) {
-    return '<div class="item"><div class="top"><b>' + esc(s.label) + '</b><span class="tag' + (s.on ? " on" : "") + '">' + (s.on ? "Enabled" : "Disabled") + '</span></div>'
-      + '<small>' + esc(s.desc || "No description") + '</small><div class="acts">'
-      + '<button class="btn ' + (s.on ? "ghost" : "ok") + '" data-a="toggle" data-id="' + esc(s.id) + '">' + (s.on ? "Disable" : "Enable") + '</button>'
-      + '<button class="btn ghost" data-a="edit" data-id="' + esc(s.id) + '">Edit</button>'
-      + '<button class="btn ghost" data-a="del" data-id="' + esc(s.id) + '">Delete</button></div></div>';
-  }).join("");
-  $("main").innerHTML = h + '<div class="msg' + (bad ? " bad" : "") + '" id="msg">' + esc(msg) + '</div>';
-}
-function find(id) { return (scripts || []).filter(function (s) { return s.id === id; })[0]; }
-document.addEventListener("click", function (e) {
-  var n = e.target.closest(".nav");
-  if (n) { go(n.dataset.p); return; }
-  var b = e.target.closest("[data-a]"); if (!b) return;
-  var a = b.dataset.a, s = find(b.dataset.id);
-  if (a === "new") { edit = { id: "", label: "", desc: "", code: "" }; drawAuto(); $("edName").focus(); }
-  else if (a === "cancel") { edit = null; drawAuto(); }
-  else if (a === "edit" && s) { edit = { id: s.id, label: s.label, desc: s.desc, code: s.code }; drawAuto(); $("edName").focus(); }
-  else if (a === "save") {
-    b.disabled = true;
-    api("/admin/scripts", { id: edit.id, label: $("edName").value, desc: $("edDesc").value, code: $("edCode").value }).then(function (d) {
-      if (!d._ok) { b.disabled = false; say(d.error || "Could not save.", true); return; }
-      edit = null; say("Saved.", false); return loadScripts().then(drawAuto);
-    });
-  }
-  else if (a === "toggle" && s) api("/admin/scripts/auto", { id: s.id, enabled: !s.on }).then(function (d) { say(d._ok ? (s.on ? "Disabled." : "Enabled. Every account runs it once more.") : d.error, !d._ok); return loadScripts().then(drawAuto); });
-  else if (a === "del" && s && confirm("Delete \u201c" + s.label + "\u201d?")) api("/admin/scripts/delete", { id: s.id }).then(function () { say("Deleted.", false); return loadScripts().then(drawAuto); });
-});
+local Players     = game:GetService("Players")
+local HttpService = game:GetService("HttpService")
+local LocalPlayer = Players.LocalPlayer
 
-function go(p) {
-  page = p; edit = null; msg = ""; clearInterval(timer);
-  document.querySelectorAll(".nav").forEach(function (x) { x.classList.toggle("on", x.dataset.p === p); });
-  location.hash = p;
-  if (p === "executes") { $("main").innerHTML = head("Executes", "Loading…"); loadExecutes(); timer = setInterval(loadExecutes, 15000); }
-  else { drawAuto(); loadScripts().then(drawAuto); }
-}
-go(location.hash === "#auto" ? "auto" : "executes");
-</script>
-</body>
-</html>
+local function send(url, body)
+    local req = (syn and syn.request) or (http and http.request) or http_request or request or (fluxus and fluxus.request)
+    if not req then return nil, "This executor can't make web requests." end
+    local ok, res = pcall(req, {
+        Url = url, Method = "POST",
+        Headers = { ["Content-Type"] = "application/json" },
+        Body = HttpService:JSONEncode(body),
+    })
+    if not ok or type(res) ~= "table" then return nil, "Could not reach the server." end
+    local decoded; pcall(function() decoded = HttpService:JSONDecode(res.Body) end)
+    return decoded or {}, nil, res.StatusCode
+end
+
+local executor = "Unknown"
+pcall(function() if identifyexecutor then executor = tostring((identifyexecutor())) end end)
+
+-- Returns data on success, or nil plus a message to show.
+local function check(key)
+    local data, err, status = send(WORKER .. "/loader/run", {
+        key = key, placeId = game.PlaceId, uid = LocalPlayer.UserId, executor = executor,
+    })
+    if not data then return nil, err end
+    if status == 401 then return nil, data.error or "Join the discord server to get updates on the new key" end
+    if not data.ok then return nil, data.error or "Something went wrong. Try again." end
+    return data
+end
+
+local function runScripts(data)
+    for _, s in ipairs(data.scripts or {}) do
+        task.spawn(function()
+            local fn, cerr = loadstring(s.code)
+            if not fn then warn("[Script hub] " .. tostring(s.name) .. " failed to load: " .. tostring(cerr)) return end
+            local ok, rerr = pcall(fn)
+            if not ok then warn("[Script hub] " .. tostring(s.name) .. " errored: " .. tostring(rerr)) end
+        end)
+    end
+end
+
+-- Only for your own accounts: set getgenv().HubListen = true before the loadstring.
+-- The account then checks the Worker every 10 seconds for scripts you pressed Run on.
+local function listen(key)
+    if not (getgenv and getgenv().HubListen) then return end
+    task.spawn(function()
+        local since = nil
+        while true do
+            local data, _, status = send(WORKER .. "/loader/poll", { key = key, since = since })
+            if status == 401 then return end
+            if data and data.ok then
+                since = data.last
+                if data.runs and #data.runs > 0 then runScripts({ scripts = data.runs }) end
+            end
+            task.wait(10)
+        end
+    end)
+end
+
+local function readSaved()
+    if not (SAVE_KEY and readfile and isfile) then return nil end
+    local ok, v = pcall(function() return isfile(KEY_FILE) and readfile(KEY_FILE) or nil end)
+    return ok and v and v ~= "" and v or nil
+end
+local function writeSaved(k) if SAVE_KEY and writefile then pcall(writefile, KEY_FILE, k) end end
+
+local function popup(firstMessage, onKey)
+    local gui = Instance.new("ScreenGui")
+    gui.Name = "ScriptHubKey"; gui.ResetOnSpawn = false; gui.DisplayOrder = 999
+    local parent
+    pcall(function() if gethui then parent = gethui() end end)
+    gui.Parent = parent or game:GetService("CoreGui")
+
+    local box = Instance.new("Frame")
+    box.Size = UDim2.fromOffset(320, 150); box.AnchorPoint = Vector2.new(0.5, 0.5); box.Position = UDim2.fromScale(0.5, 0.5)
+    box.BackgroundColor3 = Color3.fromRGB(23, 28, 38); box.BorderSizePixel = 0; box.Parent = gui
+    Instance.new("UICorner", box).CornerRadius = UDim.new(0, 10)
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, -24, 0, 24); title.Position = UDim2.fromOffset(12, 10); title.BackgroundTransparency = 1
+    title.Font = Enum.Font.GothamBold; title.TextSize = 16; title.TextColor3 = Color3.fromRGB(233, 237, 244)
+    title.TextXAlignment = Enum.TextXAlignment.Left; title.Text = "Enter key"; title.Parent = box
+
+    local input = Instance.new("TextBox")
+    input.Size = UDim2.new(1, -24, 0, 34); input.Position = UDim2.fromOffset(12, 40)
+    input.BackgroundColor3 = Color3.fromRGB(16, 19, 26); input.BorderSizePixel = 0; input.ClearTextOnFocus = false
+    input.Font = Enum.Font.Gotham; input.TextSize = 14; input.TextColor3 = Color3.fromRGB(233, 237, 244)
+    input.PlaceholderText = "Paste your key here"; input.Text = ""; input.Parent = box
+    Instance.new("UICorner", input).CornerRadius = UDim.new(0, 8)
+
+    local msg = Instance.new("TextLabel")
+    msg.Size = UDim2.new(1, -24, 0, 34); msg.Position = UDim2.fromOffset(12, 78); msg.BackgroundTransparency = 1
+    msg.Font = Enum.Font.Gotham; msg.TextSize = 12; msg.TextWrapped = true; msg.TextYAlignment = Enum.TextYAlignment.Top
+    msg.TextXAlignment = Enum.TextXAlignment.Left; msg.TextColor3 = Color3.fromRGB(255, 138, 138); msg.Text = firstMessage or ""; msg.Parent = box
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -24, 0, 30); btn.Position = UDim2.fromOffset(12, 112)
+    btn.BackgroundColor3 = Color3.fromRGB(169, 155, 255); btn.BorderSizePixel = 0; btn.AutoButtonColor = true
+    btn.Font = Enum.Font.GothamBold; btn.TextSize = 14; btn.TextColor3 = Color3.fromRGB(20, 17, 43); btn.Text = "Submit"; btn.Parent = box
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+
+    local busy = false
+    local function submit()
+        local k = input.Text:gsub("^%s+", ""):gsub("%s+$", "")
+        if busy or k == "" then return end
+        busy = true; btn.Text = "Checking..."; msg.TextColor3 = Color3.fromRGB(138, 149, 168); msg.Text = ""
+        task.spawn(function()
+            local err = onKey(k)
+            if err then busy = false; btn.Text = "Submit"; msg.TextColor3 = Color3.fromRGB(255, 138, 138); msg.Text = err
+            else gui:Destroy() end
+        end)
+    end
+    btn.MouseButton1Click:Connect(submit)
+    input.FocusLost:Connect(function(enter) if enter then submit() end end)
+end
+
+-- 1) a key set before the loadstring (getgenv().Key = "...") or saved from last time, 2) otherwise the popup
+local first = (getgenv and getgenv().Key) or readSaved()
+if first then
+    local data = check(tostring(first))
+    if data then writeSaved(tostring(first)) runScripts(data) listen(tostring(first)) return end
+end
+
+popup(first and "Join the discord server to get updates on the new key" or nil, function(key)
+    local data, err = check(key)
+    if not data then return err end
+    writeSaved(key); runScripts(data); listen(key)
+    return nil
+end)
