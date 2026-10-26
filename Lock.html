@@ -100,7 +100,7 @@ function loadExecutes() {
     if (!d._ok) { $("main").innerHTML = head("Executes", "") + '<div class="msg bad">' + esc(d.error || "Could not reach the Worker. Check the WORKER address in index.html.") + '</div>'; return; }
     $("main").innerHTML = head("Executes", "Where the script was run from. No names, no script names.")
       + '<div class="nums"><div class="num"><b>' + d.total.toLocaleString() + '</b><span>Total executes</span></div><div class="num"><b>' + d.last24h.toLocaleString() + '</b><span>Last 24 hours</span></div></div>'
-      + '<div class="cols">' + list("By game", d.places, function (k) { return k ? "Place " + k : "Unknown place"; }) + list("By country", d.countries, function (k) { return k || "Unknown"; }) + '</div>';
+      + '<div class="cols">' + list("By game", d.places, function (k) { return k ? "Place " + k : "Unknown place"; }) + list("By country", d.countries, function (k) { return k || "Unknown"; }) + list("By executor", d.executors || [], function (k) { return k || "Unknown"; }) + '</div>';
   }).catch(function () { $("main").innerHTML = head("Executes", "") + '<div class="msg bad">Could not reach the Worker. Check the WORKER address in index.html.</div>'; });
 }
 
