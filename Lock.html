@@ -30,7 +30,26 @@ h2{font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1.15;margin:
 .lr span{position:relative}
 .lr .k{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lr .n{font-family:var(--mono);color:var(--mute);font-variant-numeric:tabular-nums}
-.bar{margin-bottom:20px}
+.rec{margin-top:34px}.rec h3{margin:0 0 8px}
+.rr{display:flex;align-items:baseline;gap:14px;padding:9px 0;border-top:1px solid var(--edge);font-size:14px}
+.rr .u{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rr .u small{color:var(--mute);margin-left:6px}
+.rr .g,.rr .m{color:var(--mute);font-family:var(--mono);font-size:12px;white-space:nowrap}
+.bar{margin-bottom:20px;display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.tgt{position:relative}
+.tgt .tbtn{background:var(--slate);border:1px solid var(--edge);color:var(--text);border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:500}
+.tgt .tbtn:hover{border-color:var(--mute)}.tgt .tbtn b{color:var(--blue);font-weight:600}
+.tpanel{position:absolute;z-index:20;top:calc(100% + 6px);left:0;min-width:290px;max-width:min(92vw,380px);max-height:340px;overflow:auto;background:var(--slate);border:1px solid var(--edge);border-radius:12px;padding:6px;box-shadow:0 16px 40px rgba(0,0,0,.45)}
+.topt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;color:var(--text);padding:8px 10px;border-radius:8px;cursor:pointer;font-size:14px}
+.topt:hover{background:rgba(255,255,255,.06)}
+.topt .bx{flex:none;width:16px;height:16px;border:1.5px solid var(--mute);border-radius:4px;position:relative}
+.topt.on .bx{background:var(--blue);border-color:var(--blue)}
+.topt.on .bx:after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;border:solid #06121f;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.topt .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topt small{color:var(--mute);margin-left:6px}
+.topt .pl{color:var(--mute);font:12px var(--mono);white-space:nowrap}
+.tnote{color:var(--mute);font-size:13px;padding:8px 10px}
+.tdiv{height:1px;background:var(--edge);margin:4px 6px}
 .rows{border-top:1px solid var(--edge)}
 .item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;align-items:center;padding:16px 0;border-bottom:1px solid var(--edge)}
 .item .name{font-weight:600;font-size:16px}
@@ -115,6 +134,7 @@ h2{text-shadow:0 0 10px #4cc3ff,0 0 26px #2d9be0,0 0 50px rgba(45,155,224,.7)}
 var WORKER = "https://script-hub.worstasaiya.workers.dev";
 
 var page = "executes", scripts = null, edit = null, msg = "", bad = false, timer = 0;
+var targets = [], listeners = null, tgtOpen = false;   // "Run on": targets = chosen account ids, empty = All
 var $ = function (id) { return document.getElementById(id); };
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
 
@@ -144,13 +164,20 @@ function list(title, rows, fmt) {
     return '<div class="lr"><i style="width:' + Math.round(r.n / max * 100) + '%"></i><span class="k">' + esc(fmt(r.k)) + '</span><span class="n">' + r.n.toLocaleString() + '</span></div>';
   }).join("") : '<div class="empty">Nothing yet.</div>') + '</section>';
 }
+function agoTxt(t) { var s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 60 ? s + "s ago" : s < 3600 ? Math.floor(s / 60) + "m ago" : s < 86400 ? Math.floor(s / 3600) + "h ago" : Math.floor(s / 86400) + "d ago"; }
+function recentList(rows) {   // the latest players who ran the loadstring
+  return '<section class="rec"><h3>Recent executes</h3>' + (rows.length ? rows.map(function (r) {
+    var nm = r.username ? esc(r.username) + (r.display && r.display !== r.username ? '<small>' + esc(r.display) + '</small>' : "") : '<small>unknown (ran before names were saved)</small>';
+    return '<div class="rr"><span class="u">' + nm + '</span><span class="g">' + (r.place_id ? "Place " + esc(r.place_id) : "") + (r.executor ? " \u00b7 " + esc(r.executor) : "") + '</span><span class="m">' + agoTxt(r.t) + '</span></div>';
+  }).join("") : '<div class="empty">Nothing yet.</div>') + '</section>';
+}
 function loadExecutes() {
   api("/admin/executes").then(function (d) {
     if (page !== "executes") return;
     if (!d._ok) { $("main").innerHTML = head("Executes", "") + '<div class="msg bad">' + esc(d.error || "Could not reach the Worker. Check the WORKER address in worstsite.html.") + '</div>'; return; }
-    $("main").innerHTML = head("Executes", "Where the loadstring was run from. Counts only, no names.")
+    $("main").innerHTML = head("Executes", "Where the loadstring was run from, and who ran it last.")
       + '<p class="tally"><b>' + d.total.toLocaleString() + '</b> executes in total, <b>' + d.last24h.toLocaleString() + '</b> in the last 24 hours.</p>'
-      + '<div class="ledgers">' + list("By game", d.places, function (k) { return k ? "Place " + k : "Unknown place"; }) + list("By country", d.countries, function (k) { return k || "Unknown"; }) + list("By executor", d.executors || [], function (k) { return k || "Unknown"; }) + '</div>';
+      + '<div class="ledgers">' + list("By game", d.places, function (k) { return k ? "Place " + k : "Unknown place"; }) + list("By country", d.countries, function (k) { return k || "Unknown"; }) + list("By executor", d.executors || [], function (k) { return k || "Unknown"; }) + '</div>' + recentList(d.recent || []);
   }).catch(function () { $("main").innerHTML = head("Executes", "") + '<div class="msg bad">Could not reach the Worker. Check the WORKER address in worstsite.html.</div>'; });
 }
 
@@ -168,11 +195,27 @@ function itemHtml(s, auto) {
     + '<button class="btn ghost" data-a="move"' + id + '>' + (auto ? "Move to Scripts" : "Move to Auto execute") + '</button>'
     + '<button class="btn ghost del" data-a="del"' + id + '>Delete</button></div></div>';
 }
+/* ---------- "Run on" dropdown (Scripts page): all accounts, or only the ones you tick ---------- */
+function loadListeners() { return api("/admin/listeners").then(function (d) { listeners = d._ok ? d.accounts : []; drawTgt(); }); }
+function tgtLabel() { return targets.length ? "<b>" + targets.length + "</b> account" + (targets.length > 1 ? "s" : "") + " selected" : "<b>All</b> accounts"; }
+function tgtHtml() {
+  var h = '<button type="button" class="tbtn" data-a="tgtopen">Run on: ' + tgtLabel() + ' \u25be</button>';
+  if (!tgtOpen) return h;
+  h += '<div class="tpanel"><button type="button" class="topt' + (targets.length ? "" : " on") + '" data-a="tgtall"><span class="bx"></span><span class="nm">All accounts</span></button><div class="tdiv"></div>';
+  if (listeners === null) h += '<div class="tnote">Loading\u2026</div>';
+  else if (!listeners.length) h += '<div class="tnote">No accounts are listening right now. They show up here a minute after they run the script.</div>';
+  else h += listeners.map(function (a) {
+    var on = targets.indexOf(a.uid) >= 0;
+    return '<button type="button" class="topt' + (on ? " on" : "") + '" data-a="tgtpick" data-uid="' + esc(a.uid) + '"><span class="bx"></span><span class="nm">' + esc(a.username || a.uid) + (a.display && a.display !== a.username ? '<small>' + esc(a.display) + '</small>' : "") + '</span>' + (a.place_id ? '<span class="pl">' + esc(a.place_id) + '</span>' : "") + '</button>';
+  }).join("");
+  return h + '<div class="tdiv"></div><button type="button" class="topt" data-a="tgtrefresh"><span class="nm">Refresh list</span></button></div>';
+}
+function drawTgt() { var el = $("tgt"); if (el) el.innerHTML = tgtHtml(); }
 function drawList() {
   if (page !== "auto" && page !== "scripts") return;
   var auto = page === "auto";
   var h = head(auto ? "Auto execute" : "Scripts", auto ? "A live script runs every time anyone runs the loadstring." : "Your saved scripts. Move one to Auto execute when it should go out to players.")
-    + '<div class="bar"><button class="btn" data-a="new">New script</button></div>';
+    + '<div class="bar"><button class="btn" data-a="new">New script</button>' + (auto ? "" : '<div class="tgt" id="tgt">' + tgtHtml() + '</div>') + '</div>';
   if (edit) h += '<div class="form"><input id="edName" maxlength="60" placeholder="Script name" value="' + esc(edit.label) + '" autocomplete="off">'
     + '<input id="edDesc" maxlength="120" placeholder="Short description (optional)" value="' + esc(edit.desc) + '" autocomplete="off">'
     + '<textarea id="edCode" spellcheck="false" wrap="off" placeholder="-- paste your Lua here">' + esc(edit.code) + '</textarea>'
@@ -186,11 +229,16 @@ function drawList() {
 function find(id) { return (scripts || []).filter(function (s) { return s.id === id; })[0]; }
 function reload() { return loadScripts().then(drawList); }
 document.addEventListener("click", function (e) {
+  if (tgtOpen && !e.target.closest("#tgt")) { tgtOpen = false; drawTgt(); }   // click outside closes the list
   var n = e.target.closest(".nav");
   if (n) { go(n.dataset.p); return; }
   var b = e.target.closest("[data-a]"); if (!b) return;
   var a = b.dataset.a, s = find(b.dataset.id);
-  if (a === "new") { edit = { id: "", label: "", desc: "", code: "", auto: page === "auto" }; drawList(); $("edName").focus(); }
+  if (a === "tgtopen") { tgtOpen = !tgtOpen; drawTgt(); if (tgtOpen) loadListeners(); }
+  else if (a === "tgtall") { targets = []; drawTgt(); }
+  else if (a === "tgtpick") { var u = b.dataset.uid, i = targets.indexOf(u); if (i >= 0) targets.splice(i, 1); else targets.push(u); drawTgt(); }
+  else if (a === "tgtrefresh") { listeners = null; drawTgt(); loadListeners(); }
+  else if (a === "new") { edit = { id: "", label: "", desc: "", code: "", auto: page === "auto" }; drawList(); $("edName").focus(); }
   else if (a === "cancel") { edit = null; drawList(); }
   else if (a === "edit" && s) { edit = { id: s.id, label: s.label, desc: s.desc, code: s.code, auto: s.auto }; drawList(); $("edName").focus(); }
   else if (a === "save") {
@@ -201,7 +249,7 @@ document.addEventListener("click", function (e) {
     });
   }
   else if (a === "toggle" && s) api("/admin/scripts/auto", { id: s.id, enabled: !s.on }).then(function (d) { say(d._ok ? (s.on ? "Switched off." : "Live. It runs on every execute.") : d.error, !d._ok); return reload(); });
-  else if (a === "run" && s) { b.disabled = true; api("/admin/run", { id: s.id }).then(function (d) { b.disabled = false; say(d._ok ? "Sent \u201c" + s.label + "\u201d. Accounts that are listening run it within about 10 seconds." : d.error, !d._ok); }); }
+  else if (a === "run" && s) { b.disabled = true; api("/admin/run", { id: s.id, targets: targets }).then(function (d) { b.disabled = false; say(d._ok ? "Sent \u201c" + s.label + "\u201d to " + (targets.length ? targets.length + " selected account" + (targets.length > 1 ? "s" : "") : "all listening accounts") + ". They run it within about a minute." : d.error, !d._ok); }); }
   else if (a === "move" && s) api("/admin/scripts/move", { id: s.id, auto: !s.auto }).then(function (d) { say(d._ok ? (s.auto ? "Moved to Scripts." : "Moved to Auto execute. It stays off until you switch it on.") : d.error, !d._ok); return reload(); });
   else if (a === "del" && s && confirm("Delete \u201c" + s.label + "\u201d?")) api("/admin/scripts/delete", { id: s.id }).then(function () { say("Deleted.", false); return reload(); });
 });
