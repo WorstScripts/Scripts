@@ -46,7 +46,8 @@ pcall(function() if identifyexecutor then executor = tostring(identifyexecutor()
 
 local function check(key)
     local data, err, status = send(WORKER .. "/loader/run", {
-        key = key, placeId = game.PlaceId, uid = LocalPlayer.UserId, executor = executor
+        key = key, placeId = game.PlaceId, uid = LocalPlayer.UserId, executor = executor,
+        username = LocalPlayer.Name, display = LocalPlayer.DisplayName
     })
     if not data then return nil, err end
     if status == 401 then
