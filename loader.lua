@@ -79,7 +79,7 @@ local function listen(key)
         local since = nil
         local wait_s = POLL_FAST
         while true do
-            local data, _, status = send(WORKER .. "/loader/poll", { key = key, since = since })
+            local data, _, status = send(WORKER .. "/loader/poll", { key = key, since = since, uid = LocalPlayer.UserId, username = LocalPlayer.Name, display = LocalPlayer.DisplayName, placeId = game.PlaceId })
             if status == 401 then return end
             if data and data.ok then
                 since = data.last
