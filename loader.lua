@@ -3,7 +3,7 @@ getgenv().HubListen = true
 local WORKER = "https://script-hub.worstasaiya.workers.dev"
 local DISCORD_URL = "https://discord.gg/WFY7f6XAh7"
 local SAVE_KEY = true
-local KEY_FILE = "disck.txt"
+local KEY_FILE = "WORST.txt"
 
 if not game:IsLoaded() then game.Loaded:Wait() end
 local Players = game:GetService("Players")
@@ -70,18 +70,26 @@ local function runScripts(data)
     end
 end
 
+local POLL_FAST = 30   -- seconds between checks while scripts are being pushed (was 10: far too many Worker requests)
+local POLL_SLOW = 60   -- seconds between checks when nothing new has come in for a while
 local function listen(key)
     if not (getgenv and getgenv().HubListen) then return end
     task.spawn(function()
         local since = nil
+        local wait_s = POLL_FAST
         while true do
             local data, _, status = send(WORKER .. "/loader/poll", { key = key, since = since })
             if status == 401 then return end
             if data and data.ok then
                 since = data.last
-                if data.runs and #data.runs > 0 then runScripts({scripts = data.runs}) end
+                if data.runs and #data.runs > 0 then
+                    runScripts({scripts = data.runs})
+                    wait_s = POLL_FAST   -- something was pushed: stay quick in case more follows
+                else
+                    wait_s = math.min(POLL_SLOW, wait_s + 10)   -- idle: slowly stretch to the slow interval
+                end
             end
-            task.wait(10)
+            task.wait(wait_s)
         end
     end)
 end
