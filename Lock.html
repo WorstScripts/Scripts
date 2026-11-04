@@ -118,6 +118,20 @@ h2{text-shadow:0 0 10px #4cc3ff,0 0 26px #2d9be0,0 0 50px rgba(45,155,224,.7)}
 @keyframes lifeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 @keyframes barGrow{from{transform:scaleX(0)}to{transform:none}}
 @media(prefers-reduced-motion:reduce){main,.led,.item,.form,.lr i{animation:none!important}#bg video{display:none}}
+/* ===== Wider layout ===== */
+body{font-size:16px}
+main{max-width:1240px;padding:44px 32px 100px}
+h2{font-size:38px}.sub{font-size:16px;max-width:80ch}
+.tally{font-size:22px}.tally b{font-size:26px}
+.nav{padding:9px 24px;font-size:15px}
+.ledgers{grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px}
+.led{padding:22px}.led h3{font-size:17px}
+.lr{font-size:15.5px;padding:10px 12px}
+.rr{font-size:15.5px;padding:12px 0}.rr .g,.rr .m{font-size:13px}
+.rows{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:16px;background:none;border:0;padding:0;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}
+.item,.rows .item:last-child{background:rgba(0,0,0,.30);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:20px;box-shadow:0 12px 36px rgba(0,0,0,.16);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.item .name{font-size:18px}
+@media(max-width:600px){main{padding:32px 16px 80px}.rows{grid-template-columns:1fr}}
 </style>
 </head>
 <body class="locked">
@@ -127,6 +141,7 @@ h2{text-shadow:0 0 10px #4cc3ff,0 0 26px #2d9be0,0 0 50px rgba(45,155,224,.7)}
     <button class="nav" data-p="executes">Executes</button>
     <button class="nav" data-p="scripts">Scripts</button>
     <button class="nav" data-p="auto">Auto execute</button>
+    <button class="nav" data-p="admin" style="display:none">Admin</button>
   </nav>
 </header>
 <main id="main"></main>
@@ -144,10 +159,10 @@ function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function
 // Asks for the admin password once per browser tab and sends it with every request.
 // If the Worker says "locked" (wrong password), the saved password is forgotten and the
 // auto-refresh stops, so refresh the page to be asked again.
+var PW = sessionStorage.getItem("pw");   // only an ADMIN password is ever saved; guests and VIPs are asked again on refresh
 function api(path, body) {
-  var pw = sessionStorage.getItem("pw");
-  if (pw === null) { pw = prompt("Admin password") || ""; sessionStorage.setItem("pw", pw); }
-  var o = { cache: "no-store", headers: { "x-admin-key": pw } };
+  if (PW === null) PW = prompt("Password (leave empty to continue as a guest)") || "";   // empty / cancel / wrong = guest
+  var o = { cache: "no-store", headers: { "x-admin-key": PW } };
   if (body) { o.method = "POST"; o.headers["Content-Type"] = "application/json"; o.body = JSON.stringify(body); }
   return fetch(WORKER + path, o).then(function (r) {
     if (r.status === 401) {   // wrong password: forget it and send them away instead of showing the site
@@ -193,6 +208,7 @@ function loadExecutes() {
 function head(t, s) { return '<h2>' + t + '</h2><p class="sub">' + s + '</p>'; }
 function loadScripts() { return api("/admin/scripts").then(function (d) { scripts = d._ok ? d.scripts : []; if (!d._ok) say(d.error || "Could not load scripts.", true); }); }
 function itemHtml(s, auto) {
+  if (role !== "admin") return '<div class="item"><div><div class="name">' + esc(s.label) + '</div><small>' + esc(s.desc || "No description") + '</small></div></div>';
   var id = ' data-id="' + esc(s.id) + '"';
   var right = auto
     ? '<span class="state' + (s.on ? " on" : "") + '">' + (s.on ? "Live" : "Off") + '</span><button type="button" class="sw" role="switch" aria-checked="' + (s.on ? "true" : "false") + '" aria-label="Auto execute ' + esc(s.label) + '" data-a="toggle"' + id + '></button>'
@@ -223,7 +239,7 @@ function drawList() {
   if (page !== "auto" && page !== "scripts") return;
   var auto = page === "auto";
   var h = head(auto ? "Auto execute" : "Scripts", auto ? "A live script runs every time anyone runs the loadstring." : "Your saved scripts. Move one to Auto execute when it should go out to players.")
-    + '<div class="bar"><button class="btn" data-a="new">New script</button>' + (auto ? "" : '<div class="tgt" id="tgt">' + tgtHtml() + '</div>') + '</div>';
+    + (role === "admin" ? '<div class="bar"><button class="btn" data-a="new">New script</button>' + (auto ? "" : '<div class="tgt" id="tgt">' + tgtHtml() + '</div>') + '</div>' : "");
   if (edit) h += '<div class="form"><input id="edName" maxlength="60" placeholder="Script name" value="' + esc(edit.label) + '" autocomplete="off">'
     + '<input id="edDesc" maxlength="120" placeholder="Short description (optional)" value="' + esc(edit.desc) + '" autocomplete="off">'
     + '<textarea id="edCode" spellcheck="false" wrap="off" placeholder="-- paste your Lua here">' + esc(edit.code) + '</textarea>'
@@ -242,6 +258,7 @@ document.addEventListener("click", function (e) {
   if (n) { go(n.dataset.p); return; }
   var b = e.target.closest("[data-a]"); if (!b) return;
   var a = b.dataset.a, s = find(b.dataset.id);
+  if (a.indexOf("vip") === 0) { vipAction(a, b); return; }
   if (a === "tgtopen") { tgtOpen = !tgtOpen; drawTgt(); if (tgtOpen) loadListeners(); }
   else if (a === "tgtall") { targets = []; drawTgt(); }
   else if (a === "tgtpick") { var u = b.dataset.uid, i = targets.indexOf(u); if (i >= 0) targets.splice(i, 1); else targets.push(u); drawTgt(); }
@@ -262,14 +279,55 @@ document.addEventListener("click", function (e) {
   else if (a === "del" && s && confirm("Delete \u201c" + s.label + "\u201d?")) api("/admin/scripts/delete", { id: s.id }).then(function () { say("Deleted.", false); return reload(); });
 });
 
+/* ---------- Admin panel: VIP keys (admin only; the Worker rejects everyone else) ---------- */
+var vipKeys = null, newKey = "";
+function loadVip() { return api("/admin/vipkeys").then(function (d) { vipKeys = d._ok ? d.keys : []; if (!d._ok) say(d.error || "Could not load keys.", true); drawAdmin(); }); }
+function drawAdmin() {
+  if (page !== "admin") return;
+  var h = head("Admin", "Create and delete VIP keys. A VIP sees script names and descriptions only, never the code or any buttons.")
+    + '<div class="form"><input id="vipLabel" maxlength="40" placeholder="Who is this key for? (a name, so you can tell keys apart)" autocomplete="off">'
+    + '<input id="vipCustom" maxlength="64" placeholder="Custom key (optional, leave empty to generate one)" autocomplete="off">'
+    + '<div class="acts"><button class="btn" data-a="vipcreate">Create VIP key</button></div></div>';
+  if (newKey) h += '<div class="form"><div>New key. It is shown only once, so copy it now:</div><input id="vipNew" readonly value="' + esc(newKey) + '"><div class="acts"><button class="btn" data-a="vipcopy">Copy</button></div></div>';
+  if (vipKeys === null) h += '<div class="empty">Loading…</div>';
+  else if (!vipKeys.length) h += '<div class="empty">No VIP keys yet.</div>';
+  else h += '<div class="rows">' + vipKeys.map(function (k) {
+    return '<div class="item"><div><div class="name">' + esc(k.label || "Unnamed") + '</div><small>Key ends in ' + esc(k.hint) + ' \u00b7 created ' + new Date(k.created).toLocaleDateString() + '</small></div><div class="acts right"><button class="btn ghost del" data-a="vipdel" data-id="' + esc(k.id) + '">Delete</button></div></div>';
+  }).join("") + '</div>';
+  $("main").innerHTML = h + '<div class="msg' + (bad ? " bad" : "") + '" id="msg">' + esc(msg) + '</div>';
+}
+function vipAction(a, b) {
+  if (a === "vipcreate") {
+    b.disabled = true;
+    api("/admin/vipkeys/create", { label: $("vipLabel").value, key: $("vipCustom").value }).then(function (d) {
+      if (!d._ok) { b.disabled = false; say(d.error || "Could not create the key.", true); return; }
+      newKey = d.key; msg = "Created."; bad = false; return loadVip();
+    });
+  } else if (a === "vipcopy") {
+    var i = $("vipNew"); i.select();
+    if (navigator.clipboard) navigator.clipboard.writeText(newKey).then(function () { say("Copied.", false); }, function () { document.execCommand("copy"); say("Copied.", false); });
+    else { document.execCommand("copy"); say("Copied.", false); }
+  } else if (a === "vipdel" && confirm("Delete this VIP key? Anyone using it is locked out.")) {
+    api("/admin/vipkeys/delete", { id: b.dataset.id }).then(function (d) { msg = d._ok ? "Deleted." : (d.error || "Could not delete."); bad = !d._ok; return loadVip(); });
+  }
+}
 function go(p) {
-  page = p; edit = null; msg = ""; clearInterval(timer);
+  page = p; edit = null; msg = ""; newKey = ""; clearInterval(timer);
   document.querySelectorAll(".nav").forEach(function (x) { x.classList.toggle("on", x.dataset.p === p); });
   location.hash = p;
   if (p === "executes") { $("main").innerHTML = head("Executes", "Loading…"); loadExecutes(); timer = setInterval(loadExecutes, 15000); }
+  else if (p === "admin") { drawAdmin(); loadVip(); }
   else { drawList(); reload(); }
 }
-go(location.hash === "#auto" ? "auto" : location.hash === "#scripts" ? "scripts" : "executes");
+var role = null;   // admin / vip / guest, decided by the Worker from the password
+api("/admin/whoami").then(function (d) {
+  role = d.role || "guest";
+  if (role === "admin") sessionStorage.setItem("pw", PW); else sessionStorage.removeItem("pw");
+  var an = document.querySelector('.nav[data-p="admin"]'); if (an && role === "admin") an.style.display = "";
+  document.querySelectorAll(".nav").forEach(function (x) { if (role === "guest" && x.dataset.p !== "executes") x.style.display = "none"; });
+  var h = location.hash, more = role !== "guest";
+  go(role === "admin" && h === "#admin" ? "admin" : more && h === "#auto" ? "auto" : more && h === "#scripts" ? "scripts" : "executes");
+});
 </script>
 <script>
 // Background (same as worst.html): still image first, the video fades in over it. Video is PC only and skipped for reduced motion.
