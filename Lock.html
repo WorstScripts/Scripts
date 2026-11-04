@@ -174,9 +174,9 @@ function list(title, rows, fmt) {
 }
 function agoTxt(t) { var s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 60 ? s + "s ago" : s < 3600 ? Math.floor(s / 60) + "m ago" : s < 86400 ? Math.floor(s / 3600) + "h ago" : Math.floor(s / 86400) + "d ago"; }
 function recentList(rows) {   // the latest players who ran the loadstring
-  return '<section class="rec"><h3>Recent executes</h3>' + (rows.length ? rows.map(function (r) {
-    var nm = r.username ? esc(r.username) + (r.display && r.display !== r.username ? '<small>' + esc(r.display) + '</small>' : "") : '<small>unknown (ran before names were saved)</small>';
-    return '<div class="rr"><span class="u">' + nm + '</span><span class="g">' + (r.place_id ? esc(r.place_name || "Place " + r.place_id) : "") + (r.executor ? " \u00b7 " + esc(r.executor) : "") + '</span><span class="m">' + agoTxt(r.t) + '</span></div>';
+  return '<section class="rec"><h3>Accounts</h3>' + (rows.length ? rows.map(function (r) {
+    var nm = r.username ? esc(r.username) + (r.display && r.display !== r.username ? '<small>' + esc(r.display) + '</small>' : "") : '<small>unknown (no name saved)</small>';
+    return '<div class="rr"><span class="u">' + nm + '</span><span class="g">' + (r.place_id ? esc(r.place_name || "Place " + r.place_id) : "") + (r.executor ? " \u00b7 " + esc(r.executor) : "") + '</span><span class="m">Last execute ' + agoTxt(r.t) + '</span></div>';
   }).join("") : '<div class="empty">Nothing yet.</div>') + '</section>';
 }
 function loadExecutes() {
@@ -266,7 +266,7 @@ function go(p) {
   page = p; edit = null; msg = ""; clearInterval(timer);
   document.querySelectorAll(".nav").forEach(function (x) { x.classList.toggle("on", x.dataset.p === p); });
   location.hash = p;
-  if (p === "executes") { $("main").innerHTML = head("Executes", "Loading…"); loadExecutes(); timer = setInterval(loadExecutes, 60000); }
+  if (p === "executes") { $("main").innerHTML = head("Executes", "Loading…"); loadExecutes(); timer = setInterval(loadExecutes, 15000); }
   else { drawList(); reload(); }
 }
 go(location.hash === "#auto" ? "auto" : location.hash === "#scripts" ? "scripts" : "executes");
