@@ -1,4 +1,3 @@
-getgenv().HubListen = true
 -- WORST AUTH | Cloudflare Worker loader
 local WORKER = "https://script-hub.worstasaiya.workers.dev"
 local DISCORD_URL = "https://discord.gg/WFY7f6XAh7"
