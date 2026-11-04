@@ -118,6 +118,10 @@ h2{text-shadow:0 0 10px #4cc3ff,0 0 26px #2d9be0,0 0 50px rgba(45,155,224,.7)}
 @keyframes lifeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 @keyframes barGrow{from{transform:scaleX(0)}to{transform:none}}
 @media(prefers-reduced-motion:reduce){main,.led,.item,.form,.lr i{animation:none!important}#bg video{display:none}}
+/* ===== D1 usage meters ===== */
+.mt{display:grid;gap:4px}.mh{display:flex;justify-content:space-between}.mh b{font-family:var(--mono)}
+.mb{height:10px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden}.mb i{display:block;height:100%;border-radius:99px;transition:width .4s}
+.mt small{color:var(--mute);font-family:var(--mono);font-size:12px}
 /* ===== Wider layout ===== */
 body{font-size:16px}
 main{max-width:1240px;padding:44px 32px 100px}
@@ -282,9 +286,27 @@ document.addEventListener("click", function (e) {
 /* ---------- Admin panel: VIP keys (admin only; the Worker rejects everyone else) ---------- */
 var vipKeys = null, newKey = "";
 function loadVip() { return api("/admin/vipkeys").then(function (d) { vipKeys = d._ok ? d.keys : []; if (!d._ok) say(d.error || "Could not load keys.", true); drawAdmin(); }); }
+var usage = null;
+function loadUsage() { return api("/admin/usage").then(function (d) { usage = d._ok ? d : { configured: true, error: d.error || "Could not load usage." }; drawAdmin(); }); }
+function meter(label, n, max) {
+  var p = Math.min(100, n / max * 100), c = p >= 90 ? "var(--bad)" : p >= 70 ? "#e9b83d" : "var(--ok)";
+  return '<div class="mt"><div class="mh"><span>' + label + '</span><b>' + p.toFixed(p < 10 ? 1 : 0) + '%</b></div><div class="mb"><i style="width:' + p + '%;background:' + c + '"></i></div><small>' + n.toLocaleString() + ' / ' + max.toLocaleString() + '</small></div>';
+}
+function usageHtml() {
+  var h = '<section class="form"><h3 style="margin:0;font-size:17px">D1 usage today <small style="color:var(--mute);font-weight:400">(free plan, resets 00:00 UTC)</small></h3>';
+  if (usage === null) h += '<div class="empty">Loading\u2026</div>';
+  else if (!usage.configured) h += '<div class="tnote" style="padding:0">Not set up yet. Add two Worker secrets, <b>CF_API_TOKEN</b> (an API token with Account Analytics: Read) and <b>CF_ACCOUNT_ID</b>, and the usage shows up here.</div>';
+  else if (usage.error) h += '<div class="msg bad" style="margin:0">' + esc(usage.error) + '</div>';
+  else {
+    h += meter("Rows read", usage.rowsRead, usage.readLimit) + meter("Rows written", usage.rowsWritten, usage.writeLimit);
+    if (usage.sizeBytes) h += meter("Database size", usage.sizeBytes, usage.sizeLimit);
+    h += '<small style="color:var(--mute)">Cloudflare\u2019s numbers can lag by about a minute.</small>';
+  }
+  return h + '</section>';
+}
 function drawAdmin() {
   if (page !== "admin") return;
-  var h = head("Admin", "Create and delete VIP keys. A VIP sees script names and descriptions only, never the code or any buttons.")
+  var h = head("Admin", "Create and delete VIP keys. A VIP sees script names and descriptions only, never the code or any buttons.") + usageHtml()
     + '<div class="form"><input id="vipLabel" maxlength="40" placeholder="Who is this key for? (a name, so you can tell keys apart)" autocomplete="off">'
     + '<input id="vipCustom" maxlength="64" placeholder="Custom key (optional, leave empty to generate one)" autocomplete="off">'
     + '<div class="acts"><button class="btn" data-a="vipcreate">Create VIP key</button></div></div>';
@@ -316,7 +338,7 @@ function go(p) {
   document.querySelectorAll(".nav").forEach(function (x) { x.classList.toggle("on", x.dataset.p === p); });
   location.hash = p;
   if (p === "executes") { $("main").innerHTML = head("Executes", "Loading…"); loadExecutes(); timer = setInterval(loadExecutes, 15000); }
-  else if (p === "admin") { drawAdmin(); loadVip(); }
+  else if (p === "admin") { drawAdmin(); loadVip(); loadUsage(); }
   else { drawList(); reload(); }
 }
 var role = null;   // admin / vip / guest, decided by the Worker from the password
