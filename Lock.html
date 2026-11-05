@@ -195,7 +195,7 @@ function agoTxt(t) { var s = Math.max(0, Math.round((Date.now() - t) / 1000)); r
 function recentList(rows) {   // the latest players who ran the loadstring
   return '<section class="rec"><h3>Accounts</h3>' + (rows.length ? rows.map(function (r) {
     var nm = r.username ? esc(r.username) + (r.display && r.display !== r.username ? '<small>' + esc(r.display) + '</small>' : "") : '<small>unknown (no name saved)</small>';
-    return '<div class="rr"><span class="u">' + nm + '</span><span class="g">' + (r.place_id ? esc(r.place_name || "Place " + r.place_id) : "") + (r.executor ? " \u00b7 " + esc(r.executor) : "") + '</span><span class="m">Last execute ' + agoTxt(r.t) + '</span></div>';
+    return '<div class="rr"><span class="u">' + nm + '</span><span class="g">' + (r.place_id ? esc(r.place_name || "Place " + r.place_id) : "") + (r.executor ? " · " + esc(r.executor) : "") + '</span><span class="m">Last execute ' + agoTxt(r.t) + '</span></div>';
   }).join("") : '<div class="empty">Nothing yet.</div>') + '</section>';
 }
 function loadExecutes() {
@@ -227,10 +227,10 @@ function itemHtml(s, auto) {
 function loadListeners() { return api("/admin/listeners").then(function (d) { listeners = d._ok ? d.accounts : []; drawTgt(); }); }
 function tgtLabel() { return targets.length ? "<b>" + targets.length + "</b> account" + (targets.length > 1 ? "s" : "") + " selected" : "<b>All</b> accounts"; }
 function tgtHtml() {
-  var h = '<button type="button" class="tbtn" data-a="tgtopen">Run on: ' + tgtLabel() + ' \u25be</button>';
+  var h = '<button type="button" class="tbtn" data-a="tgtopen">Run on: ' + tgtLabel() + ' ▾</button>';
   if (!tgtOpen) return h;
   h += '<div class="tpanel"><button type="button" class="topt' + (targets.length ? "" : " on") + '" data-a="tgtall"><span class="bx"></span><span class="nm">All accounts</span></button><div class="tdiv"></div>';
-  if (listeners === null) h += '<div class="tnote">Loading\u2026</div>';
+  if (listeners === null) h += '<div class="tnote">Loading…</div>';
   else if (!listeners.length) h += '<div class="tnote">No accounts are listening right now. They show up here a minute after they run the script.</div>';
   else h += listeners.map(function (a) {
     var on = targets.indexOf(a.uid) >= 0;
@@ -263,6 +263,7 @@ document.addEventListener("click", function (e) {
   var b = e.target.closest("[data-a]"); if (!b) return;
   var a = b.dataset.a, s = find(b.dataset.id);
   if (a.indexOf("vip") === 0) { vipAction(a, b); return; }
+  if (a.indexOf("key") === 0) { keyAction(a, b); return; }
   if (a === "tgtopen") { tgtOpen = !tgtOpen; drawTgt(); if (tgtOpen) loadListeners(); }
   else if (a === "tgtall") { targets = []; drawTgt(); }
   else if (a === "tgtpick") { var u = b.dataset.uid, i = targets.indexOf(u); if (i >= 0) targets.splice(i, 1); else targets.push(u); drawTgt(); }
@@ -278,9 +279,9 @@ document.addEventListener("click", function (e) {
     });
   }
   else if (a === "toggle" && s) api("/admin/scripts/auto", { id: s.id, enabled: !s.on }).then(function (d) { say(d._ok ? (s.on ? "Switched off." : "Live. It runs on every execute.") : d.error, !d._ok); return reload(); });
-  else if (a === "run" && s) { b.disabled = true; api("/admin/run", { id: s.id, targets: targets }).then(function (d) { b.disabled = false; say(d._ok ? "Sent \u201c" + s.label + "\u201d to " + (targets.length ? targets.length + " selected account" + (targets.length > 1 ? "s" : "") : "all listening accounts") + ". They run it within about 10 minutes." : d.error, !d._ok); }); }
+  else if (a === "run" && s) { b.disabled = true; api("/admin/run", { id: s.id, targets: targets }).then(function (d) { b.disabled = false; say(d._ok ? "Sent “" + s.label + "” to " + (targets.length ? targets.length + " selected account" + (targets.length > 1 ? "s" : "") : "all listening accounts") + ". They run it within about 10 minutes." : d.error, !d._ok); }); }
   else if (a === "move" && s) api("/admin/scripts/move", { id: s.id, auto: !s.auto }).then(function (d) { say(d._ok ? (s.auto ? "Moved to Scripts." : "Moved to Auto execute. It stays off until you switch it on.") : d.error, !d._ok); return reload(); });
-  else if (a === "del" && s && confirm("Delete \u201c" + s.label + "\u201d?")) api("/admin/scripts/delete", { id: s.id }).then(function () { say("Deleted.", false); return reload(); });
+  else if (a === "del" && s && confirm("Delete “" + s.label + "”?")) api("/admin/scripts/delete", { id: s.id }).then(function () { say("Deleted.", false); return reload(); });
 });
 
 /* ---------- Admin panel: VIP keys (admin only; the Worker rejects everyone else) ---------- */
@@ -288,25 +289,38 @@ var vipKeys = null, newKey = "";
 function loadVip() { return api("/admin/vipkeys").then(function (d) { vipKeys = d._ok ? d.keys : []; if (!d._ok) say(d.error || "Could not load keys.", true); drawAdmin(); }); }
 var usage = null;
 function loadUsage() { return api("/admin/usage").then(function (d) { usage = d._ok ? d : { configured: true, error: d.error || "Could not load usage." }; drawAdmin(); }); }
+/* ---------- Key system (loader key + on/off), admin only ---------- */
+var keysys = null;
+function loadKeySys() { return api("/admin/keysystem").then(function (d) { keysys = d._ok ? d : null; if (!d._ok) say(d.error || "Could not load the key system.", true); drawAdmin(); }); }
 function meter(label, n, max) {
   var p = Math.min(100, n / max * 100), c = p >= 90 ? "var(--bad)" : p >= 70 ? "#e9b83d" : "var(--ok)";
   return '<div class="mt"><div class="mh"><span>' + label + '</span><b>' + p.toFixed(p < 10 ? 1 : 0) + '%</b></div><div class="mb"><i style="width:' + p + '%;background:' + c + '"></i></div><small>' + n.toLocaleString() + ' / ' + max.toLocaleString() + '</small></div>';
 }
 function usageHtml() {
   var h = '<section class="form"><h3 style="margin:0;font-size:17px">D1 usage today <small style="color:var(--mute);font-weight:400">(free plan, resets 00:00 UTC)</small></h3>';
-  if (usage === null) h += '<div class="empty">Loading\u2026</div>';
+  if (usage === null) h += '<div class="empty">Loading…</div>';
   else if (!usage.configured) h += '<div class="tnote" style="padding:0">Not set up yet. Add two Worker secrets, <b>CF_API_TOKEN</b> (an API token with Account Analytics: Read) and <b>CF_ACCOUNT_ID</b>, and the usage shows up here.</div>';
   else if (usage.error) h += '<div class="msg bad" style="margin:0">' + esc(usage.error) + '</div>';
   else {
     h += meter("Rows read", usage.rowsRead, usage.readLimit) + meter("Rows written", usage.rowsWritten, usage.writeLimit);
     if (usage.sizeBytes) h += meter("Database size", usage.sizeBytes, usage.sizeLimit);
-    h += '<small style="color:var(--mute)">Cloudflare\u2019s numbers can lag by about a minute.</small>';
+    h += '<small style="color:var(--mute)">Cloudflare’s numbers can lag by about a minute.</small>';
   }
+  return h + '</section>';
+}
+function keysysHtml() {
+  var h = '<section class="form"><h3 style="margin:0;font-size:17px">Key system</h3>';
+  if (!keysys) return h + '<div class="empty">Loading…</div></section>';
+  h += '<div class="acts" style="align-items:center;justify-content:space-between"><span>Required to run the loader</span><div class="acts" style="gap:8px;align-items:center"><span class="state' + (keysys.on ? " on" : "") + '">' + (keysys.on ? "On" : "Off") + '</span><button type="button" class="sw" role="switch" aria-checked="' + (keysys.on ? "true" : "false") + '" aria-label="Key system required" data-a="keytoggle"></button></div></div>';
+  h += '<div><div style="color:var(--mute);font-size:13px;margin:4px 0">Current key</div><input id="keyCur" readonly value="' + esc(keysys.key || "") + '"></div>';
+  h += '<div class="acts"><button class="btn ghost" data-a="keycopy">Copy</button></div>';
+  h += '<div><div style="color:var(--mute);font-size:13px;margin:12px 0 4px">Set a new key</div><input id="keyNew" maxlength="64" placeholder="New loader key" autocomplete="off"></div>';
+  h += '<div class="acts"><button class="btn" data-a="keysave">Save new key</button></div>';
   return h + '</section>';
 }
 function drawAdmin() {
   if (page !== "admin") return;
-  var h = head("Admin", "Create and delete VIP keys. A VIP sees script names and descriptions only, never the code or any buttons.") + usageHtml()
+  var h = head("Admin", "Create and delete VIP keys. A VIP sees script names and descriptions only, never the code or any buttons.") + keysysHtml() + usageHtml()
     + '<div class="form"><input id="vipLabel" maxlength="40" placeholder="Who is this key for? (a name, so you can tell keys apart)" autocomplete="off">'
     + '<input id="vipCustom" maxlength="64" placeholder="Custom key (optional, leave empty to generate one)" autocomplete="off">'
     + '<div class="acts"><button class="btn" data-a="vipcreate">Create VIP key</button></div></div>';
@@ -314,7 +328,7 @@ function drawAdmin() {
   if (vipKeys === null) h += '<div class="empty">Loading…</div>';
   else if (!vipKeys.length) h += '<div class="empty">No VIP keys yet.</div>';
   else h += '<div class="rows">' + vipKeys.map(function (k) {
-    return '<div class="item"><div><div class="name">' + esc(k.label || "Unnamed") + '</div><small>Key ends in ' + esc(k.hint) + ' \u00b7 created ' + new Date(k.created).toLocaleDateString() + '</small></div><div class="acts right"><button class="btn ghost del" data-a="vipdel" data-id="' + esc(k.id) + '">Delete</button></div></div>';
+    return '<div class="item"><div><div class="name">' + esc(k.label || "Unnamed") + '</div><small>Key ends in ' + esc(k.hint) + ' · created ' + new Date(k.created).toLocaleDateString() + '</small></div><div class="acts right"><button class="btn ghost del" data-a="vipdel" data-id="' + esc(k.id) + '">Delete</button></div></div>';
   }).join("") + '</div>';
   $("main").innerHTML = h + '<div class="msg' + (bad ? " bad" : "") + '" id="msg">' + esc(msg) + '</div>';
 }
@@ -333,12 +347,34 @@ function vipAction(a, b) {
     api("/admin/vipkeys/delete", { id: b.dataset.id }).then(function (d) { msg = d._ok ? "Deleted." : (d.error || "Could not delete."); bad = !d._ok; return loadVip(); });
   }
 }
+function keyAction(a, b) {
+  if (a === "keytoggle") {
+    api("/admin/keysystem", { on: !keysys.on }).then(function (d) {
+      if (!d._ok) { say(d.error || "Could not update.", true); return; }
+      say(keysys.on ? "Key system turned off. The loader will not ask for a key." : "Key system turned on.", false);
+      return loadKeySys();
+    });
+  } else if (a === "keysave") {
+    var v = ($("keyNew").value || "").trim();
+    if (!v) { say("Enter a new key first.", true); return; }
+    b.disabled = true;
+    api("/admin/keysystem", { key: v }).then(function (d) {
+      b.disabled = false;
+      if (!d._ok) { say(d.error || "Could not save.", true); return; }
+      say("Key updated. It takes effect immediately.", false); return loadKeySys();
+    });
+  } else if (a === "keycopy") {
+    var i = $("keyCur"); i.select();
+    if (navigator.clipboard) navigator.clipboard.writeText(i.value).then(function () { say("Copied.", false); }, function () { document.execCommand("copy"); say("Copied.", false); });
+    else { document.execCommand("copy"); say("Copied.", false); }
+  }
+}
 function go(p) {
   page = p; edit = null; msg = ""; newKey = ""; clearInterval(timer);
   document.querySelectorAll(".nav").forEach(function (x) { x.classList.toggle("on", x.dataset.p === p); });
   location.hash = p;
   if (p === "executes") { $("main").innerHTML = head("Executes", "Loading…"); loadExecutes(); timer = setInterval(loadExecutes, 15000); }
-  else if (p === "admin") { drawAdmin(); loadVip(); loadUsage(); }
+  else if (p === "admin") { drawAdmin(); loadVip(); loadUsage(); loadKeySys(); }
   else { drawList(); reload(); }
 }
 var role = null;   // admin / vip / guest, decided by the Worker from the password
