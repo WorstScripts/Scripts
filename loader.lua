@@ -672,9 +672,35 @@ local function popup(firstMessage, onKey)
     end)
 end
 
+-- Response cache: accounts that server hop every few seconds would otherwise send one request per hop.
+-- A saved answer younger than CACHE_TTL seconds is reused instead (one file per account, so every account is still logged by the server).
+-- Set CACHE_TTL = 0 to turn it off. NOTE: the cache file holds the scripts the server sent, as plain text, inside the executor's workspace folder.
+local CACHE_TTL = 300
+local function cacheFile() return "WORST_cache_" .. tostring(LocalPlayer.UserId) .. ".json" end
+local function readCache(key)
+    if CACHE_TTL <= 0 or not (readfile and isfile) then return nil end
+    local ok, data = pcall(function()
+        if not isfile(cacheFile()) then return nil end
+        local c = HttpService:JSONDecode(readfile(cacheFile()))
+        if type(c) == "table" and c.key == key and type(c.t) == "number" and math.abs(os.time() - c.t) < CACHE_TTL
+            and type(c.data) == "table" then
+            return c.data
+        end
+    end)
+    return ok and data or nil
+end
+local function writeCache(key, data)
+    if CACHE_TTL <= 0 or not writefile then return end
+    pcall(function() writefile(cacheFile(), HttpService:JSONEncode({ key = key, t = os.time(), data = data })) end)
+end
+
 local first = (getgenv and getgenv().Key) or readSaved()
 if first then
-    local data = check(tostring(first))
+    local data = readCache(tostring(first))   -- fresh saved answer: no request to the server
+    if not data then
+        data = check(tostring(first))
+        if data then writeCache(tostring(first), data) end
+    end
     if data then
         writeSaved(tostring(first))
         runScripts(data)
@@ -686,6 +712,7 @@ end
 popup(first and "Saved key invalid or expired. Join Discord." or nil, function(key)
     local data, err = check(key)
     if not data then return err end
+    writeCache(key, data)
     writeSaved(key)
     runScripts(data)
     listen(key)
