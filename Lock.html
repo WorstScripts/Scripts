@@ -264,6 +264,7 @@ document.addEventListener("click", function (e) {
   var a = b.dataset.a, s = find(b.dataset.id);
   if (a.indexOf("vip") === 0) { vipAction(a, b); return; }
   if (a.indexOf("key") === 0) { keyAction(a, b); return; }
+  if (a === "ghrefresh") { b.disabled = true; loadWatch(true); return; }
   if (a === "tgtopen") { tgtOpen = !tgtOpen; drawTgt(); if (tgtOpen) loadListeners(); }
   else if (a === "tgtall") { targets = []; drawTgt(); }
   else if (a === "tgtpick") { var u = b.dataset.uid, i = targets.indexOf(u); if (i >= 0) targets.splice(i, 1); else targets.push(u); drawTgt(); }
@@ -289,6 +290,20 @@ var vipKeys = null, newKey = "";
 function loadVip() { return api("/admin/vipkeys").then(function (d) { vipKeys = d._ok ? d.keys : []; if (!d._ok) say(d.error || "Could not load keys.", true); drawAdmin(); }); }
 var usage = null;
 function loadUsage() { return api("/admin/usage").then(function (d) { usage = d._ok ? d : { configured: true, error: d.error || "Could not load usage." }; drawAdmin(); }); }
+/* ---------- GitHub script watch: when the script file on GitHub last changed (admin only) ---------- */
+var watch = null;
+function loadWatch(fresh) { return api("/admin/scriptwatch" + (fresh ? "?fresh=1" : "")).then(function (d) { watch = d._ok ? d : { error: d.error || "Could not check GitHub." }; drawAdmin(); }); }
+function watchHtml() {
+  var h = '<section class="form"><h3 style="margin:0;font-size:17px">Script on GitHub <small style="color:var(--mute);font-weight:400">' + (watch && watch.repo ? esc(watch.repo + " · " + watch.branch) : "") + '</small></h3>';
+  if (!watch) return h + '<div class="empty">Loading…</div></section>';
+  if (watch.error) return h + '<div class="msg bad" style="margin:0">' + esc(watch.error) + '</div><div class="acts"><button class="btn ghost" data-a="ghrefresh">Check again</button></div></section>';
+  var c = watch.commit;
+  if (c && c.date) h += '<div>Last updated <b>' + esc(new Date(c.date).toLocaleString()) + '</b> <small style="display:inline;color:var(--mute)">(' + agoTxt(c.date) + ')</small></div>'
+    + '<div style="color:var(--mute)">' + esc(c.message || "No message") + (c.url ? ' · <a href="' + esc(c.url) + '" target="_blank" rel="noopener" style="color:var(--blue)">' + esc(c.sha) + '</a>' : "") + '</div>';
+  else h += '<div class="tnote" style="padding:0">GitHub’s commit info could not be read' + (watch.apiError ? " (" + esc(watch.apiError) + ")" : "") + ', so changes are detected from the file content instead.</div>';
+  h += '<small style="color:var(--mute)">' + (watch.changed ? "Change detected: the site first saw this version " : "The site first saw this version ") + agoTxt(watch.detected) + '.</small>';
+  return h + '<div class="acts"><button class="btn ghost" data-a="ghrefresh">Check now</button></div></section>';
+}
 /* ---------- Key system (loader key + on/off), admin only ---------- */
 var keysys = null;
 function loadKeySys() { return api("/admin/keysystem").then(function (d) { keysys = d._ok ? d : null; if (!d._ok) say(d.error || "Could not load the key system.", true); drawAdmin(); }); }
@@ -320,7 +335,7 @@ function keysysHtml() {
 }
 function drawAdmin() {
   if (page !== "admin") return;
-  var h = head("Admin", "Create and delete VIP keys. A VIP sees script names and descriptions only, never the code or any buttons.") + keysysHtml() + usageHtml()
+  var h = head("Admin", "Create and delete VIP keys. A VIP sees script names and descriptions only, never the code or any buttons.") + watchHtml() + keysysHtml() + usageHtml()
     + '<div class="form"><input id="vipLabel" maxlength="40" placeholder="Who is this key for? (a name, so you can tell keys apart)" autocomplete="off">'
     + '<input id="vipCustom" maxlength="64" placeholder="Custom key (optional, leave empty to generate one)" autocomplete="off">'
     + '<div class="acts"><button class="btn" data-a="vipcreate">Create VIP key</button></div></div>';
@@ -374,7 +389,7 @@ function go(p) {
   document.querySelectorAll(".nav").forEach(function (x) { x.classList.toggle("on", x.dataset.p === p); });
   location.hash = p;
   if (p === "executes") { $("main").innerHTML = head("Executes", "Loading…"); loadExecutes(); timer = setInterval(loadExecutes, 15000); }
-  else if (p === "admin") { drawAdmin(); loadVip(); loadUsage(); loadKeySys(); }
+  else if (p === "admin") { drawAdmin(); loadVip(); loadUsage(); loadKeySys(); loadWatch(false); }
   else { drawList(); reload(); }
 }
 var role = null;   // admin / vip / guest, decided by the Worker from the password
