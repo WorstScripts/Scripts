@@ -1,6 +1,6 @@
 -- WORST AUTH | Cloudflare Worker loader
 local WORKER = "https://script-hub.worstasaiya.workers.dev"
-local DISCORD_URL = "https://discord.gg/WFY7f6XAh7"
+local DISCORD_URL = "https://discord.gg/Hk7QN5un5k"
 local SAVE_KEY = true
 local KEY_FILE = "WORST.txt"
 
@@ -695,6 +695,23 @@ local function writeCache(key, data)
 end
 
 local first = (getgenv and getgenv().Key) or readSaved()
+
+-- No key on this device: ask the Worker once with an empty key before showing any popup.
+-- If the key system is OFF in the admin panel the Worker lets it through and the scripts run
+-- with no popup at all. If it is ON the Worker answers 401 and the popup below shows as before.
+if not first then
+    local open = readCache("")
+    if not open then
+        open = check("")
+        if open then writeCache("", open) end
+    end
+    if open then
+        runScripts(open)
+        listen("")
+        return
+    end
+end
+
 if first then
     local data = readCache(tostring(first))   -- fresh saved answer: no request to the server
     if not data then
