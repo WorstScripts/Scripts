@@ -118,6 +118,13 @@ h2{text-shadow:0 0 10px #4cc3ff,0 0 26px #2d9be0,0 0 50px rgba(45,155,224,.7)}
 @keyframes lifeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
 @keyframes barGrow{from{transform:scaleX(0)}to{transform:none}}
 @media(prefers-reduced-motion:reduce){main,.led,.item,.form,.lr i{animation:none!important}#bg video{display:none}}
+.hr{display:flex;justify-content:space-between;gap:14px;padding:8px 10px;font-size:14px;border-radius:8px}
+.hr:hover{background:rgba(255,255,255,.06)}
+.hr .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hr .st{font:12px var(--mono);white-space:nowrap;color:var(--mute)}
+.still .led,.still .lr i{animation:none!important}
+.hr .nm{flex:1}.hr .eg{font:12px var(--mono);color:var(--mute);white-space:nowrap}
+.hr .st.on{color:var(--ok)}.hr .st.mid{color:#e9b83d}.hr .st.off{color:var(--bad)}
 /* ===== D1 usage meters ===== */
 .mt{display:grid;gap:4px}.mh{display:flex;justify-content:space-between}.mh b{font-family:var(--mono)}
 .mb{height:10px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden}.mb i{display:block;height:100%;border-radius:99px;transition:width .4s}
@@ -145,6 +152,7 @@ h2{font-size:38px}.sub{font-size:16px;max-width:80ch}
     <button class="nav" data-p="executes">Executes</button>
     <button class="nav" data-p="scripts">Scripts</button>
     <button class="nav" data-p="auto">Auto execute</button>
+    <button class="nav" data-p="hoppers" style="display:none">SAE HOPPERS</button>
     <button class="nav" data-p="admin" style="display:none">Admin</button>
   </nav>
 </header>
@@ -152,6 +160,11 @@ h2{font-size:38px}.sub{font-size:16px;max-width:80ch}
 <script>
 // Put your Cloudflare Worker address here (no slash at the end).
 var WORKER = "https://script-hub.worstasaiya.workers.dev";
+// Your Hawkhost relay (no slash at the end). Used only for the live Accounts list.
+var HOPPERS = "https://come-feelings-incurred-degrees.trycloudflare.com";
+// How often the SAE HOPPERS page asks the relay for the list (milliseconds). Each ask is tiny and the relay
+// keeps everything in memory, so 5000 is cheap. Only the newest request is ever in flight.
+var HOPPER_POLL_MS = 5000;
 // Anyone who enters the wrong admin password is sent here.
 var DENIED_URL = "https://discord.gg/w0rst";
 
@@ -183,6 +196,45 @@ function api(path, body) {
   });
 }
 function say(t, b) { msg = t; bad = !!b; var m = $("msg"); if (m) { m.textContent = t; m.className = "msg" + (b ? " bad" : ""); } }
+
+/* ---------- SAE HOPPERS page (admin only; data comes from the Hawkhost relay) ---------- */
+var hp = null, hpCtl = null, hpDrawn = false;
+function stopHoppers() { if (hpCtl) { hpCtl.abort(); hpCtl = null; } }
+function loadHoppers() {
+  if (role !== "admin" || document.hidden) return;   // nothing is fetched while the tab is in the background
+  stopHoppers();                                      // drop the previous request: only the newest one is in flight
+  var ctl = hpCtl = new AbortController();
+  fetch(HOPPERS + "/hoppers", { cache: "no-store", headers: { "x-admin-key": PW }, signal: ctl.signal })
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+    .then(function (d) { if (hpCtl !== ctl) return; hpCtl = null; hp = d; drawHoppers(); })
+    .catch(function (e) { if ((e && e.name === "AbortError") || hpCtl !== ctl) return; hpCtl = null; hp = { error: true }; drawHoppers(); });
+}
+document.addEventListener("visibilitychange", function () { if (!document.hidden && page === "hoppers") loadHoppers(); });
+function hopperRow(a) {
+  var cls = !a.online ? "off" : a.status === "Scanning" ? "on" : "mid";
+  return '<div class="hr"><span class="nm">' + esc(a.name) + '</span>'
+    + (a.online ? '<span class="eg">' + Number(a.eggs || 0).toLocaleString() + ' eggs</span>' : "")
+    + '<span class="st ' + cls + '">' + esc(a.status) + (!a.online && a.age != null ? ' · ' + agoTxt(Date.now() - a.age) : '') + '</span></div>';
+}
+function hopperList(title, rows, empty) {
+  return '<section class="led"><h3>' + title + ' <small style="color:var(--mute);font-weight:400">' + rows.length + '</small></h3>'
+    + (rows.length ? rows.map(hopperRow).join("") : '<div class="empty">' + empty + '</div>') + '</section>';
+}
+function drawHoppers() {
+  if (page !== "hoppers") return;
+  var h = head("SAE HOPPERS", "Live status of every SAE hopper account. Refreshes every few seconds.");
+  if (hp === null) h += '<div class="empty">Loading…</div>';
+  else if (hp.error) h += '<div class="msg bad">Could not reach the relay. Check that the HOPPERS address in worstsite.html is right and the tunnel service is running on the server.</div>';
+  else {
+    var on = hp.accounts.filter(function (a) { return a.online; }), off = hp.accounts.filter(function (a) { return !a.online; });
+    h += '<p class="tally"><b>' + hp.online + '</b> of <b>' + hp.total + '</b> hoppers online.</p>'
+      + '<div class="bar"><button class="btn ghost" data-a="hprefresh">Refresh now</button></div>'
+      + '<div class="ledgers">' + hopperList("Online", on, "No hoppers online right now.") + hopperList("Offline", off, "None. Every hopper that has reported is online.") + '</div>';
+  }
+  $("main").className = hpDrawn ? "still" : "";
+  $("main").innerHTML = h;
+  hpDrawn = hp !== null;
+}
 
 /* ---------- Executes ---------- */
 function list(title, rows, fmt) {
@@ -257,7 +309,7 @@ function drawList() {
 function find(id) { return (scripts || []).filter(function (s) { return s.id === id; })[0]; }
 function reload() { return loadScripts().then(drawList); }
 document.addEventListener("click", function (e) {
-  if (tgtOpen && !e.target.closest("#tgt")) { tgtOpen = false; drawTgt(); }   // click outside closes the list
+  if (tgtOpen && !e.target.closest("#tgt")) { tgtOpen = false; drawTgt(); }
   var n = e.target.closest(".nav");
   if (n) { go(n.dataset.p); return; }
   var b = e.target.closest("[data-a]"); if (!b) return;
@@ -265,7 +317,8 @@ document.addEventListener("click", function (e) {
   if (a.indexOf("vip") === 0) { vipAction(a, b); return; }
   if (a.indexOf("key") === 0) { keyAction(a, b); return; }
   if (a === "ghrefresh") { b.disabled = true; loadWatch(true); return; }
-  if (a === "tgtopen") { tgtOpen = !tgtOpen; drawTgt(); if (tgtOpen) loadListeners(); }
+  if (a === "hprefresh") { loadHoppers(); }
+  else if (a === "tgtopen") { tgtOpen = !tgtOpen; drawTgt(); if (tgtOpen) loadListeners(); }
   else if (a === "tgtall") { targets = []; drawTgt(); }
   else if (a === "tgtpick") { var u = b.dataset.uid, i = targets.indexOf(u); if (i >= 0) targets.splice(i, 1); else targets.push(u); drawTgt(); }
   else if (a === "tgtrefresh") { listeners = null; drawTgt(); loadListeners(); }
@@ -385,10 +438,11 @@ function keyAction(a, b) {
   }
 }
 function go(p) {
-  page = p; edit = null; msg = ""; newKey = ""; clearInterval(timer);
+  page = p; edit = null; msg = ""; newKey = ""; clearInterval(timer); stopHoppers(); hpDrawn = false; $("main").className = "";
   document.querySelectorAll(".nav").forEach(function (x) { x.classList.toggle("on", x.dataset.p === p); });
   location.hash = p;
   if (p === "executes") { $("main").innerHTML = head("Executes", "Loading…"); loadExecutes(); timer = setInterval(loadExecutes, 15000); }
+  else if (p === "hoppers") { hp = null; drawHoppers(); loadHoppers(); timer = setInterval(loadHoppers, HOPPER_POLL_MS); }
   else if (p === "admin") { drawAdmin(); loadVip(); loadUsage(); loadKeySys(); loadWatch(false); }
   else { drawList(); reload(); }
 }
@@ -397,9 +451,10 @@ api("/admin/whoami").then(function (d) {
   role = d.role || "guest";
   if (role === "admin") sessionStorage.setItem("pw", PW); else sessionStorage.removeItem("pw");
   var an = document.querySelector('.nav[data-p="admin"]'); if (an && role === "admin") an.style.display = "";
+  var hn = document.querySelector('.nav[data-p="hoppers"]'); if (hn && role === "admin") hn.style.display = "";
   document.querySelectorAll(".nav").forEach(function (x) { if (role === "guest" && x.dataset.p !== "executes") x.style.display = "none"; });
   var h = location.hash, more = role !== "guest";
-  go(role === "admin" && h === "#admin" ? "admin" : more && h === "#auto" ? "auto" : more && h === "#scripts" ? "scripts" : "executes");
+  go(role === "admin" && h === "#admin" ? "admin" : role === "admin" && h === "#hoppers" ? "hoppers" : more && h === "#auto" ? "auto" : more && h === "#scripts" ? "scripts" : "executes");
 });
 </script>
 <script>
