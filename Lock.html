@@ -122,7 +122,13 @@ h2{text-shadow:0 0 10px #4cc3ff,0 0 26px #2d9be0,0 0 50px rgba(45,155,224,.7)}
 .hr:hover{background:rgba(255,255,255,.06)}
 .hr .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hr .st{font:12px var(--mono);white-space:nowrap;color:var(--mute)}
-.still .led,.still .lr i{animation:none!important}
+.still .led,.still .lr i,.still .item{animation:none!important}
+.form select{background:rgba(0,0,0,.38);border:1px solid var(--edge);border-radius:8px;padding:10px 12px;width:100%;font:inherit;color:var(--text)}
+.form select option{background:#0e1522;color:#e6ebf5}
+.form small{color:var(--mute)}
+.ckgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+@media(max-width:600px){.ckgrid{grid-template-columns:1fr}}
+.mono{font-family:var(--mono)}
 .hr .nm{flex:1}.hr .eg{font:12px var(--mono);color:var(--mute);white-space:nowrap}
 .hr .st.on{color:var(--ok)}.hr .st.mid{color:#e9b83d}.hr .st.off{color:var(--bad)}
 /* ===== D1 usage meters ===== */
@@ -198,7 +204,7 @@ function api(path, body) {
 function say(t, b) { msg = t; bad = !!b; var m = $("msg"); if (m) { m.textContent = t; m.className = "msg" + (b ? " bad" : ""); } }
 
 /* ---------- SAE HOPPERS page (admin only; data comes from the Hawkhost relay) ---------- */
-var hp = null, hpCtl = null, hpDrawn = false;
+var hp = null, hpCtl = null;
 function stopHoppers() { if (hpCtl) { hpCtl.abort(); hpCtl = null; } }
 function loadHoppers() {
   if (role !== "admin" || document.hidden) return;   // nothing is fetched while the tab is in the background
@@ -209,7 +215,25 @@ function loadHoppers() {
     .then(function (d) { if (hpCtl !== ctl) return; hpCtl = null; hp = d; drawHoppers(); })
     .catch(function (e) { if ((e && e.name === "AbortError") || hpCtl !== ctl) return; hpCtl = null; hp = { error: true }; drawHoppers(); });
 }
-document.addEventListener("visibilitychange", function () { if (!document.hidden && page === "hoppers") loadHoppers(); });
+function hopTick() { loadHoppers(); loadClients(); }
+document.addEventListener("visibilitychange", function () { if (!document.hidden && page === "hoppers") hopTick(); });
+
+// Admin calls to the relay (client keys). Always resolves: { _ok, ...json } or { _ok:false, error }.
+function relay(path, body) {
+  var ctl = new AbortController(), t = setTimeout(function () { ctl.abort(); }, 8000);
+  var o = { cache: "no-store", headers: { "x-admin-key": PW }, signal: ctl.signal };
+  if (body) { o.method = "POST"; o.headers["Content-Type"] = "application/json"; o.body = JSON.stringify(body); }
+  return fetch(HOPPERS + path, o).then(function (r) {
+    clearTimeout(t);
+    return r.json().catch(function () { return {}; }).then(function (d) { d._ok = r.ok; return d; });
+  }, function () { clearTimeout(t); return { _ok: false, error: "Could not reach the relay." }; });
+}
+
+function fmtSpan(s) {
+  s = Math.max(0, Math.floor(s));
+  var d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+  return d ? d + "d " + h + "h" : h ? h + "h " + m + "m" : m + "m";
+}
 function hopperRow(a) {
   var cls = !a.online ? "off" : a.status === "Scanning" ? "on" : "mid";
   return '<div class="hr"><span class="nm">' + esc(a.name) + '</span>'
@@ -220,20 +244,107 @@ function hopperList(title, rows, empty) {
   return '<section class="led"><h3>' + title + ' <small style="color:var(--mute);font-weight:400">' + rows.length + '</small></h3>'
     + (rows.length ? rows.map(hopperRow).join("") : '<div class="empty">' + empty + '</div>') + '</section>';
 }
+// The page is built once (shell). Polling only refreshes #hpTop and #ckList, so a half-typed Create Key form is never wiped.
+function hpShell() {
+  if ($("hpTop")) return;
+  $("main").className = "";
+  $("main").innerHTML = head("SAE HOPPERS", "Live status of every SAE hopper account, and the client keys that decide who gets their alerts.")
+    + '<div id="hpTop"></div><div id="ckBox"></div>';
+  drawClients();
+}
 function drawHoppers() {
   if (page !== "hoppers") return;
-  var h = head("SAE HOPPERS", "Live status of every SAE hopper account. Refreshes every few seconds.");
-  if (hp === null) h += '<div class="empty">Loading…</div>';
-  else if (hp.error) h += '<div class="msg bad">Could not reach the relay. Check that the HOPPERS address in worstsite.html is right and the tunnel service is running on the server.</div>';
+  hpShell();
+  var h = "";
+  if (hp === null) h = '<div class="empty">Loading…</div>';
+  else if (hp.error) h = '<div class="msg bad">Could not reach the relay. Check that the HOPPERS address in worstsite.html is right and the tunnel service is running on the server.</div>';
   else {
     var on = hp.accounts.filter(function (a) { return a.online; }), off = hp.accounts.filter(function (a) { return !a.online; });
-    h += '<p class="tally"><b>' + hp.online + '</b> of <b>' + hp.total + '</b> hoppers online.</p>'
+    h = '<p class="tally"><b>' + hp.online + '</b> of <b>' + hp.total + '</b> hoppers online.</p>'
       + '<div class="bar"><button class="btn ghost" data-a="hprefresh">Refresh now</button></div>'
       + '<div class="ledgers">' + hopperList("Online", on, "No hoppers online right now.") + hopperList("Offline", off, "None. Every hopper that has reported is online.") + '</div>';
   }
-  $("main").className = hpDrawn ? "still" : "";
-  $("main").innerHTML = h;
-  hpDrawn = hp !== null;
+  $("hpTop").innerHTML = h;
+  if (hp !== null) $("main").className = "still";   // later refreshes redraw without replaying the fade-in
+}
+
+/* ---------- Client keys (admin only): who may use the joiner, for how long, on how many bots ---------- */
+var ck = null, ckOpen = false, ckBusy = false;
+function ckSay(t, b) { var m = $("ckMsg"); if (m) { m.textContent = t; m.className = "msg" + (b ? " bad" : ""); } }
+function loadClients() {
+  if (role !== "admin" || document.hidden || ckBusy || page !== "hoppers") return;
+  ckBusy = true;
+  relay("/admin/clients").then(function (d) {
+    ckBusy = false;
+    ck = d._ok && d.ok ? d : { error: d.error || "Could not load client keys. Is the relay updated to v4?" };
+    drawClients();
+  });
+}
+function ckItem(c) {
+  var id = ' data-id="' + esc(c.key) + '"';
+  var st = c.status === "unused" ? "Not used yet · lasts " + fmtSpan(c.durationMs / 1000)
+    : c.status === "expired" ? "Expired" : fmtSpan(c.secondsLeft) + " left";
+  return '<div class="item"><div><div class="name">' + esc(c.label || "Unnamed") + '</div>'
+    + '<small class="mono">' + esc(c.key) + '</small>'
+    + '<small><span class="state' + (c.status === "active" ? " on" : "") + '">' + st + '</span>' + (c.connected ? ' · <span class="state on">online now</span>' : "") + '</small>'
+    + '<small>Bots ' + c.assigned.length + '/' + c.bots + (c.assigned.length ? ' · ' + esc(c.assigned.join(", ")) : "") + '</small></div>'
+    + '<div class="acts more"><button class="btn ghost" data-a="ckcopy"' + id + '>Copy key</button>'
+    + '<button class="btn ghost" data-a="ckbots"' + id + ' data-n="' + c.bots + '">Set bots</button>'
+    + '<button class="btn ghost" data-a="ckadd"' + id + '>Add time</button>'
+    + '<button class="btn ghost del" data-a="ckdel"' + id + '>Delete</button></div></div>';
+}
+function drawClients() {
+  var box = $("ckBox"); if (!box) return;
+  if (!$("ckList")) box.innerHTML = '<div class="bar" style="justify-content:space-between;align-items:center;margin-top:36px"><h3 style="margin:0;font-size:20px">Client keys</h3><button class="btn" data-a="ckopen">Create Key</button></div>'
+    + '<div id="ckForm"></div><p class="sub" id="ckPool" style="margin:0 0 14px"></p><div id="ckList"></div><div class="msg" id="ckMsg"></div>';
+  drawCkForm();
+  var l = $("ckList");
+  if (ck === null) { l.innerHTML = '<div class="empty">Loading…</div>'; return; }
+  if (ck.error) { l.innerHTML = '<div class="msg bad">' + esc(ck.error) + '</div>'; $("ckPool").textContent = ""; return; }
+  $("ckPool").textContent = ck.pool.online + " bots online · " + ck.pool.assigned + " given to clients · " + ck.pool.free + " free";
+  l.innerHTML = ck.clients.length ? '<div class="rows">' + ck.clients.map(ckItem).join("") + '</div>' : '<div class="empty">No client keys yet. Press Create Key.</div>';
+}
+// the form is drawn only when opened / closed (never by polling), so typing is never lost
+var ckFormShown = false;
+function drawCkForm() {
+  var f = $("ckForm"); if (!f || ckFormShown === ckOpen) return;
+  ckFormShown = ckOpen;
+  f.innerHTML = !ckOpen ? "" : '<div class="form">'
+    + '<input id="ckLabel" maxlength="40" placeholder="Client name (so you can tell them apart)" autocomplete="off">'
+    + '<input id="ckCustom" maxlength="64" placeholder="Custom key (optional, leave empty to generate one)" autocomplete="off">'
+    + '<div class="ckgrid"><div><small>Bots for this client</small><input id="ckBots" type="number" min="1" max="500" value="3"></div>'
+    + '<div><small>Lasts</small><input id="ckDur" type="number" min="1" value="7"></div>'
+    + '<div><small>Unit</small><select id="ckUnit"><option value="24">days</option><option value="1">hours</option></select></div></div>'
+    + '<small>The timer starts when the client first logs in, not when you create the key.</small>'
+    + '<div class="acts"><button class="btn" data-a="cksave">Create key</button><button class="btn ghost" data-a="ckcancel">Cancel</button></div></div>';
+}
+function ckAction(a, b) {
+  var id = b.dataset.id;
+  if (a === "ckopen") { ckOpen = !ckOpen; drawCkForm(); if (ckOpen && $("ckLabel")) $("ckLabel").focus(); }
+  else if (a === "ckcancel") { ckOpen = false; drawCkForm(); }
+  else if (a === "cksave") {
+    b.disabled = true;
+    relay("/admin/clients/create", { label: $("ckLabel").value, key: $("ckCustom").value, bots: Number($("ckBots").value), hours: Number($("ckDur").value) * Number($("ckUnit").value) }).then(function (d) {
+      b.disabled = false;
+      if (!d._ok || !d.ok) { ckSay(d.error || "Could not create the key.", true); return; }
+      ckOpen = false; drawCkForm(); ckSay("Created. The key is " + d.key + " (also in the list below).", false); ckBusy = false; loadClients();
+    });
+  }
+  else if (a === "ckcopy") {
+    if (navigator.clipboard) navigator.clipboard.writeText(id).then(function () { ckSay("Copied " + id, false); }, function () { prompt("Copy this key:", id); });
+    else prompt("Copy this key:", id);
+  }
+  else if (a === "ckbots") {
+    var v = prompt("How many bots should this client get?", b.dataset.n); if (v === null) return;
+    relay("/admin/clients/update", { key: id, bots: Number(v) }).then(function (d) { ckSay(d._ok && d.ok ? "Updated." : (d.error || "Could not update."), !(d._ok && d.ok)); ckBusy = false; loadClients(); });
+  }
+  else if (a === "ckadd") {
+    var h = prompt("Add how many hours? 24 = one day. Use a negative number to remove time.", "24"); if (h === null) return;
+    relay("/admin/clients/update", { key: id, addHours: Number(h) }).then(function (d) { ckSay(d._ok && d.ok ? "Time updated." : (d.error || "Could not update."), !(d._ok && d.ok)); ckBusy = false; loadClients(); });
+  }
+  else if (a === "ckdel" && confirm("Delete this key? The client is logged out right away.")) {
+    relay("/admin/clients/delete", { key: id }).then(function (d) { ckSay(d._ok && d.ok ? "Deleted." : (d.error || "Could not delete."), !(d._ok && d.ok)); ckBusy = false; loadClients(); });
+  }
 }
 
 /* ---------- Executes ---------- */
@@ -314,10 +425,11 @@ document.addEventListener("click", function (e) {
   if (n) { go(n.dataset.p); return; }
   var b = e.target.closest("[data-a]"); if (!b) return;
   var a = b.dataset.a, s = find(b.dataset.id);
+  if (a.indexOf("ck") === 0) { ckAction(a, b); return; }
   if (a.indexOf("vip") === 0) { vipAction(a, b); return; }
   if (a.indexOf("key") === 0) { keyAction(a, b); return; }
   if (a === "ghrefresh") { b.disabled = true; loadWatch(true); return; }
-  if (a === "hprefresh") { loadHoppers(); }
+  if (a === "hprefresh") { hopTick(); }
   else if (a === "tgtopen") { tgtOpen = !tgtOpen; drawTgt(); if (tgtOpen) loadListeners(); }
   else if (a === "tgtall") { targets = []; drawTgt(); }
   else if (a === "tgtpick") { var u = b.dataset.uid, i = targets.indexOf(u); if (i >= 0) targets.splice(i, 1); else targets.push(u); drawTgt(); }
@@ -438,11 +550,11 @@ function keyAction(a, b) {
   }
 }
 function go(p) {
-  page = p; edit = null; msg = ""; newKey = ""; clearInterval(timer); stopHoppers(); hpDrawn = false; $("main").className = "";
+  page = p; edit = null; msg = ""; newKey = ""; clearInterval(timer); stopHoppers(); $("main").className = "";
   document.querySelectorAll(".nav").forEach(function (x) { x.classList.toggle("on", x.dataset.p === p); });
   location.hash = p;
   if (p === "executes") { $("main").innerHTML = head("Executes", "Loading…"); loadExecutes(); timer = setInterval(loadExecutes, 15000); }
-  else if (p === "hoppers") { hp = null; drawHoppers(); loadHoppers(); timer = setInterval(loadHoppers, HOPPER_POLL_MS); }
+  else if (p === "hoppers") { $("main").innerHTML = ""; hp = null; ck = null; ckOpen = false; ckFormShown = false; drawHoppers(); hopTick(); timer = setInterval(hopTick, HOPPER_POLL_MS); }
   else if (p === "admin") { drawAdmin(); loadVip(); loadUsage(); loadKeySys(); loadWatch(false); }
   else { drawList(); reload(); }
 }
