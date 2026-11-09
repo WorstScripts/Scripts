@@ -251,7 +251,10 @@ function hpShell() {
   $("main").innerHTML = head("SAE HOPPERS", "Live status of every SAE hopper account, and the client keys that decide who gets their alerts.")
     + '<div id="hpTop"></div>'
     + '<section class="form" id="frBox" style="margin-top:36px">'
-    + '<div class="bar" style="justify-content:space-between;align-items:center;margin:0"><h3 style="margin:0;font-size:20px">Free version</h3><span class="state on" id="frVal">…</span></div>'
+    + '<div class="bar" style="margin:0"><h3 style="margin:0;font-size:20px">Free version</h3></div>'
+    + '<div class="bar" style="justify-content:space-between;align-items:center;margin:6px 0 0"><span>Delay behind paying clients</span><span class="state on" id="frDelVal">…</span></div>'
+    + '<input id="frDelay" type="range" min="0" max="30" step="0.5" value="2" disabled style="padding:0;border:0;background:none;accent-color:var(--blue);cursor:pointer">'
+    + '<div class="bar" style="justify-content:space-between;align-items:center;margin:6px 0 0"><span>Max egg value</span><span class="state on" id="frVal">…</span></div>'
     + '<input id="frSlider" type="range" min="0" max="300" step="1" value="0" disabled style="padding:0;border:0;background:none;accent-color:var(--blue);cursor:pointer">'
     + '<small id="frInfo" style="color:var(--mute)">Loading…</small></section>'
     + '<div id="ckBox"></div>';
@@ -306,7 +309,7 @@ function drawClients() {
   var l = $("ckList");
   if (ck === null) { l.innerHTML = '<div class="empty">Loading…</div>'; return; }
   if (ck.error) { l.innerHTML = '<div class="msg bad">' + esc(ck.error) + '</div>'; $("ckPool").textContent = ""; return; }
-  $("ckPool").textContent = ck.pool.online + " bots online · " + ck.pool.assigned + " given to clients · " + ck.pool.free + " free";
+  $("ckPool").textContent = ck.pool.online + " bots online · " + ck.pool.assigned + " in use by clients · " + ck.pool.free + " not used by anyone";
   l.innerHTML = ck.clients.length ? '<div class="rows">' + ck.clients.map(ckItem).join("") + '</div>' : '<div class="empty">No client keys yet. Press Create Key.</div>';
 }
 // the form is drawn only when opened / closed (never by polling), so typing is never lost
@@ -317,7 +320,7 @@ function drawCkForm() {
   f.innerHTML = !ckOpen ? "" : '<div class="form">'
     + '<input id="ckLabel" maxlength="40" placeholder="Client name (so you can tell them apart)" autocomplete="off">'
     + '<input id="ckCustom" maxlength="64" placeholder="Custom key (optional, leave empty to generate one)" autocomplete="off">'
-    + '<div class="ckgrid"><div><small>Bots for this client</small><input id="ckBots" type="number" min="1" max="500" value="3"></div>'
+    + '<div class="ckgrid"><div><small>Max bots for this client</small><input id="ckBots" type="number" min="1" max="500" value="3"></div>'
     + '<div><small>Lasts</small><input id="ckDur" type="number" min="1" value="7"></div>'
     + '<div><small>Unit</small><select id="ckUnit"><option value="24">days</option><option value="1">hours</option></select></div></div>'
     + '<small>The timer starts when the client first logs in, not when you create the key.</small>'
@@ -340,7 +343,7 @@ function ckAction(a, b) {
     else prompt("Copy this key:", id);
   }
   else if (a === "ckbots") {
-    var v = prompt("How many bots should this client get?", b.dataset.n); if (v === null) return;
+    var v = prompt("Maximum bots this client can get alerts from?", b.dataset.n); if (v === null) return;
     relay("/admin/clients/update", { key: id, bots: Number(v) }).then(function (d) { ckSay(d._ok && d.ok ? "Updated." : (d.error || "Could not update."), !(d._ok && d.ok)); ckBusy = false; loadClients(); });
   }
   else if (a === "ckadd") {
@@ -369,22 +372,29 @@ function frFmt(v) {
   for (var i = 0; i < U.length; i++) if (v >= U[i][0]) return "$" + Number((v / U[i][0]).toPrecision(3)) + U[i][1] + "/s";
   return "$" + v + "/s";
 }
+function frDelFmt(sec) { sec = Number(sec); return sec <= 0 ? "No delay" : sec + "s"; }
+function frLate() { return fr.delayMs > 0 ? (fr.delayMs / 1000) + "s after paying clients" : "at the same time as paying clients"; }
 function frText() {
   var s = $("frSlider"), v = $("frVal"); if (!s || !v) return;
   v.textContent = frFmt(frToValue(s.value));
 }
 function drawFree() {
-  var s = $("frSlider"), i = $("frInfo"); if (!s || !i) return;
+  var s = $("frSlider"), i = $("frInfo"), dl = $("frDelay"); if (!s || !i) return;
   if (fr === null) { i.textContent = "Loading…"; return; }
-  if (fr.error) { s.disabled = true; i.style.color = "var(--bad)"; i.textContent = fr.error; return; }
+  if (fr.error) { s.disabled = true; if (dl) dl.disabled = true; i.style.color = "var(--bad)"; i.textContent = fr.error; return; }
   s.disabled = false;
+  if (dl) {
+    dl.disabled = false;
+    if (document.activeElement !== dl && !frSaving) { dl.value = Math.min(30, Math.round(fr.delayMs / 500) / 2); $("frDelVal").textContent = frDelFmt(fr.delayMs / 1000); }
+    else $("frDelVal").textContent = frDelFmt(dl.value);
+  }
   if (document.activeElement !== s && !frSaving) { s.value = frToStep(fr.max); $("frVal").textContent = frFmt(fr.max); }   // show the exact saved value
   else frText();
   i.style.color = "var(--mute)";
   var who = fr.online + " free user" + (fr.online === 1 ? "" : "s") + " connected.";
   i.textContent = !(fr.max > 0) ? "Off. Anyone without a key sees nothing."
-    : fr.max >= 1e18 ? "People without a key see every egg, " + (fr.delayMs / 1000) + "s after paying clients. " + who
-    : "People without a key only see eggs worth up to " + frFmt(fr.max) + ", " + (fr.delayMs / 1000) + "s after paying clients. Anything worth more is hidden from them. " + who;
+    : fr.max >= 1e18 ? "People without a key see every egg, " + frLate() + ". " + who
+    : "People without a key only see eggs worth up to " + frFmt(fr.max) + ", " + frLate() + ". Anything worth more is hidden from them. " + who;
 }
 function loadFree() {
   if (role !== "admin" || document.hidden || frBusy || frSaving || page !== "hoppers") return;
@@ -395,11 +405,16 @@ function loadFree() {
     drawFree();
   });
 }
-document.addEventListener("input", function (e) { if (e.target && e.target.id === "frSlider") frText(); });
+document.addEventListener("input", function (e) {
+  if (!e.target) return;
+  if (e.target.id === "frSlider") frText();
+  else if (e.target.id === "frDelay") $("frDelVal").textContent = frDelFmt(e.target.value);
+});
 document.addEventListener("change", function (e) {
-  if (!e.target || e.target.id !== "frSlider") return;
+  if (!e.target || (e.target.id !== "frSlider" && e.target.id !== "frDelay")) return;
   frSaving = true;
-  relay("/admin/free", { max: frToValue(e.target.value) }).then(function (d) {
+  var body = e.target.id === "frDelay" ? { delayMs: Math.round(Number(e.target.value) * 1000) } : { max: frToValue(e.target.value) };
+  relay("/admin/free", body).then(function (d) {
     frSaving = false;
     if (!(d._ok && d.ok)) { var i = $("frInfo"); if (i) { i.style.color = "var(--bad)"; i.textContent = d.error || "Could not save."; } return; }
     loadFree();
