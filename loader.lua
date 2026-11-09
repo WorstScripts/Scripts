@@ -48,13 +48,26 @@ local function check(key)
         key = key, placeId = game.PlaceId, uid = LocalPlayer.UserId, executor = executor,
         username = LocalPlayer.Name, display = LocalPlayer.DisplayName
     })
-    if not data then return nil, err end
+    if not data then return nil, err, nil end
     if status == 401 then
-        return nil, data.error or "Key expired or invalid. Join Discord for a new key."
+        return nil, data.error or "Key expired or invalid. Join Discord for a new key.", 401
     end
-    if not data.ok then return nil, data.error or "Something went wrong. Try again." end
+    if not data.ok then return nil, data.error or "Something went wrong. Try again.", status or 0 end
     return data
 end
+
+-- Network hiccups / Cloudflare errors / 5xx must NOT be treated as "key required". Retry a few times,
+-- and let the caller look at `status`: only 401 (and 429) mean the server really wants a key.
+local function checkRetry(key)
+    local data, err, status
+    for i = 1, 3 do
+        data, err, status = check(key)
+        if data or status == 401 or status == 429 then break end
+        if i < 3 then task.wait(i * 1.5) end
+    end
+    return data, err, status
+end
+local function keyWanted(status) return status == 401 or status == 429 end
 
 local function runScripts(data)
     for _, s in ipairs(data.scripts or {}) do
@@ -699,11 +712,21 @@ local first = (getgenv and getgenv().Key) or readSaved()
 -- No key on this device: ask the Worker once with an empty key before showing any popup.
 -- If the key system is OFF in the admin panel the Worker lets it through and the scripts run
 -- with no popup at all. If it is ON the Worker answers 401 and the popup below shows as before.
+local function unavailable(status, err)
+    warn("[WORST AUTH] Server not reachable right now (" .. tostring(status or "no response") .. "): " .. tostring(err) .. ". Run the script again in a moment.")
+end
+
 if not first then
     local open = readCache("")
     if not open then
-        open = check("")
-        if open then writeCache("", open) end
+        local err, status
+        open, err, status = checkRetry("")
+        if open then
+            writeCache("", open)
+        elseif not keyWanted(status) then
+            unavailable(status, err)   -- transient problem: do NOT show the key popup
+            return
+        end
     end
     if open then
         runScripts(open)
@@ -714,14 +737,19 @@ end
 
 if first then
     local data = readCache(tostring(first))   -- fresh saved answer: no request to the server
+    local err, status
     if not data then
-        data = check(tostring(first))
+        data, err, status = checkRetry(tostring(first))
         if data then writeCache(tostring(first), data) end
     end
     if data then
         writeSaved(tostring(first))
         runScripts(data)
         listen(tostring(first))
+        return
+    end
+    if not keyWanted(status) then
+        unavailable(status, err)   -- saved key may be fine; the server just didn't answer properly
         return
     end
 end
