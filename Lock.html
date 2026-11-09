@@ -1,765 +1,646 @@
--- WORST AUTH | Cloudflare Worker loader
-local WORKER = "https://script-hub.worstasaiya.workers.dev"
-local DISCORD_URL = "https://discord.gg/Hk7QN5un5k"
-local SAVE_KEY = true
-local KEY_FILE = "WORST.txt"
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Script</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--ink:#070b14;--slate:#0e1522;--edge:#1c2536;--text:#e6ebf5;--mute:#8793aa;--blue:#3d9be9;--ok:#4fd18b;--bad:#ff7b7b;--mono:"JetBrains Mono",ui-monospace,Consolas,monospace}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+html{background:#050b16}
+body.locked header,body.locked main{visibility:hidden}   /* nothing is shown until the Worker accepts the password */
+body{background:transparent;color:var(--text);font:15px/1.55 "Instrument Sans",system-ui,sans-serif}
+button,input,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+header{display:flex;justify-content:center;padding:20px 16px 0}
+.pill{display:flex;gap:4px;padding:5px;border:1px solid var(--edge);border-radius:99px;background:var(--slate)}
+.nav{background:none;border:0;border-radius:99px;padding:7px 18px;color:var(--mute);cursor:pointer;font-weight:500}
+.nav:hover{color:var(--text)}
+.nav.on{background:var(--blue);color:#06121f;font-weight:600}
+main{max-width:880px;margin:0 auto;padding:40px 20px 90px}
+h2{font-size:30px;font-weight:700;letter-spacing:-.02em;line-height:1.15;margin:0 0 8px}
+.sub{color:var(--mute);margin:0 0 28px;max-width:60ch}
+.tally{font-size:20px;margin:0 0 34px}
+.tally b{font:600 22px var(--mono);color:var(--blue);font-variant-numeric:tabular-nums}
+.ledgers{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:30px}
+.led h3{font-size:15px;font-weight:600;margin:0 0 10px}
+.lr{position:relative;display:flex;justify-content:space-between;gap:12px;padding:7px 10px;margin-bottom:3px;font-size:14px;overflow:hidden;border-radius:6px}
+.lr i{position:absolute;inset:0 auto 0 0;background:rgba(61,155,233,.2);border-radius:6px}
+.lr span{position:relative}
+.lr .k{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lr .n{font-family:var(--mono);color:var(--mute);font-variant-numeric:tabular-nums}
+.rec{margin-top:34px}.rec h3{margin:0 0 8px}
+.rr{display:flex;align-items:baseline;gap:14px;padding:9px 0;border-top:1px solid var(--edge);font-size:14px}
+.rr .u{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rr .u small{color:var(--mute);margin-left:6px}
+.rr .g,.rr .m{color:var(--mute);font-family:var(--mono);font-size:12px;white-space:nowrap}
+.bar{margin-bottom:20px;display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.tgt{position:relative}
+.tgt .tbtn{background:var(--slate);border:1px solid var(--edge);color:var(--text);border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:500}
+.tgt .tbtn:hover{border-color:var(--mute)}.tgt .tbtn b{color:var(--blue);font-weight:600}
+.tpanel{position:absolute;z-index:20;top:calc(100% + 6px);left:0;min-width:290px;max-width:min(92vw,380px);max-height:340px;overflow:auto;background:var(--slate);border:1px solid var(--edge);border-radius:12px;padding:6px;box-shadow:0 16px 40px rgba(0,0,0,.45)}
+.topt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:0;color:var(--text);padding:8px 10px;border-radius:8px;cursor:pointer;font-size:14px}
+.topt:hover{background:rgba(255,255,255,.06)}
+.topt .bx{flex:none;width:16px;height:16px;border:1.5px solid var(--mute);border-radius:4px;position:relative}
+.topt.on .bx{background:var(--blue);border-color:var(--blue)}
+.topt.on .bx:after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;border:solid #06121f;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.topt .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.topt small{color:var(--mute);margin-left:6px}
+.topt .pl{color:var(--mute);font:12px var(--mono);white-space:nowrap}
+.tnote{color:var(--mute);font-size:13px;padding:8px 10px}
+.tdiv{height:1px;background:var(--edge);margin:4px 6px}
+.rows{border-top:1px solid var(--edge)}
+.item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 16px;align-items:center;padding:16px 0;border-bottom:1px solid var(--edge)}
+.item .name{font-weight:600;font-size:16px}
+.item small{display:block;color:var(--mute)}
+.acts{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.item .more{grid-column:1/-1}
+.btn{background:var(--blue);color:#06121f;border:0;border-radius:8px;padding:8px 16px;font-weight:600;cursor:pointer}
+.btn:hover{filter:brightness(1.1)}
+.btn.ghost{background:none;border:1px solid var(--edge);color:var(--mute);font-weight:500}
+.btn.ghost:hover{color:var(--text);border-color:var(--mute);filter:none}
+.btn.del:hover{color:var(--bad);border-color:var(--bad)}
+.item .btn{padding:5px 12px;font-size:13px}
+.item .right .btn{font-size:14px;padding:7px 18px}
+.btn:disabled{opacity:.5;cursor:default}
+.state{font-size:13px;color:var(--mute)}.state.on{color:var(--ok)}
+.sw{appearance:none;-webkit-appearance:none;border:0;width:44px;height:24px;border-radius:99px;background:var(--edge);position:relative;cursor:pointer;transition:background .15s;flex:none;padding:0}
+.sw::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:var(--text);transition:transform .15s}
+.sw[aria-checked="true"]{background:var(--ok)}
+.sw[aria-checked="true"]::after{transform:translateX(20px);background:#06210f}
+.form{background:var(--slate);border:1px solid var(--edge);border-radius:12px;padding:16px;margin-bottom:24px;display:grid;gap:10px}
+.form input,.form textarea{background:var(--ink);border:1px solid var(--edge);border-radius:8px;padding:10px 12px;width:100%}
+.form input:focus,.form textarea:focus{border-color:var(--blue);outline:0}
+.form textarea{min-height:240px;font:13px/1.6 var(--mono);resize:vertical;tab-size:2}
+.msg{min-height:22px;color:var(--mute);margin-top:20px}.msg.bad{color:var(--bad)}
+.empty{color:var(--mute);padding:24px 0}
+@media(max-width:600px){h2{font-size:25px}.item{grid-template-columns:1fr}.item .right{justify-content:space-between}}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
 
-if not game:IsLoaded() then game.Loaded:Wait() end
-local Players = game:GetService("Players")
-local HttpService = game:GetService("HttpService")
-local TweenService = game:GetService("TweenService")
-local UIS = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
-local LocalPlayer = Players.LocalPlayer
+/* ===== Visuals from worst.html: video wallpaper, glass, glow, motion ===== */
+#bg{position:fixed;inset:0;z-index:-1;background:#050b16 center/cover no-repeat}
+#bg video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity 1.2s}
+#bg video.on{opacity:1}
+#bg::after{content:"";position:absolute;inset:0;background:linear-gradient(rgba(5,11,22,.5),rgba(5,11,22,.72))}
+.pill{background:rgba(0,0,0,.30);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-color:rgba(255,255,255,.12);box-shadow:0 12px 36px rgba(0,0,0,.16)}
+.nav{transition:color .15s,background .2s,box-shadow .2s,transform .15s}
+.nav:hover{transform:translateY(-1px)}
+.nav.on{box-shadow:0 0 14px rgba(61,155,233,.65)}
+main{animation:lifeUp .45s both}
+h2{text-shadow:0 0 10px #4cc3ff,0 0 26px #2d9be0,0 0 50px rgba(45,155,224,.7)}
+.sub{text-shadow:0 1px 3px rgba(0,0,0,.9)}
+.tally b{text-shadow:0 0 8px currentColor,0 0 18px currentColor}
+.led,.rows,.form{-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.led{background:rgba(0,0,0,.30);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:16px;box-shadow:0 12px 36px rgba(0,0,0,.16);animation:lifeUp .5s both}
+.led:nth-child(2){animation-delay:.08s}.led:nth-child(3){animation-delay:.16s}
+.lr i{transform-origin:left;animation:barGrow .7s cubic-bezier(.2,.8,.2,1) both;box-shadow:0 0 10px rgba(61,155,233,.45)}
+.lr{transition:transform .15s,background .2s}
+.lr:hover{transform:translateX(4px);background:rgba(255,255,255,.05)}
+.rows{background:rgba(0,0,0,.30);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:0 18px;box-shadow:0 12px 36px rgba(0,0,0,.16)}
+.rows .item:last-child{border-bottom:0}
+.item{animation:lifeUp .4s both;transition:transform .15s}
+.item:nth-child(2){animation-delay:.05s}.item:nth-child(3){animation-delay:.1s}.item:nth-child(4){animation-delay:.15s}.item:nth-child(n+5){animation-delay:.2s}
+.item:hover{transform:translateX(4px)}
+.item .name{text-shadow:0 0 8px rgba(120,200,255,.5)}
+.btn{transition:transform .15s,filter .15s,background .2s,box-shadow .2s,border-color .2s,color .2s;box-shadow:0 0 10px rgba(61,155,233,.35)}
+.btn:hover{transform:translateY(-2px);box-shadow:0 0 16px rgba(61,155,233,.65)}
+.btn:active{transform:scale(.96)}
+.btn.ghost{box-shadow:none;background:rgba(0,0,0,.25)}
+.btn.ghost:hover{box-shadow:none}
+.state.on{text-shadow:0 0 8px currentColor}
+.sw[aria-checked="true"]{box-shadow:0 0 12px rgba(79,209,139,.55)}
+.form{background:rgba(0,0,0,.38);border-color:rgba(255,255,255,.12);box-shadow:0 12px 36px rgba(0,0,0,.16);animation:lifeUp .3s both}
+.form input,.form textarea{background:rgba(0,0,0,.38);transition:border-color .2s,box-shadow .2s}
+.form input:focus,.form textarea:focus{box-shadow:0 0 0 3px rgba(61,155,233,.2)}
+.msg,.empty{text-shadow:0 1px 3px rgba(0,0,0,.9)}
+@keyframes lifeUp{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes barGrow{from{transform:scaleX(0)}to{transform:none}}
+@media(prefers-reduced-motion:reduce){main,.led,.item,.form,.lr i{animation:none!important}#bg video{display:none}}
+.hr{display:flex;justify-content:space-between;gap:14px;padding:8px 10px;font-size:14px;border-radius:8px}
+.hr:hover{background:rgba(255,255,255,.06)}
+.hr .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hr .st{font:12px var(--mono);white-space:nowrap;color:var(--mute)}
+.still .led,.still .lr i,.still .item{animation:none!important}
+.form select{background:rgba(0,0,0,.38);border:1px solid var(--edge);border-radius:8px;padding:10px 12px;width:100%;font:inherit;color:var(--text)}
+.form select option{background:#0e1522;color:#e6ebf5}
+.form small{color:var(--mute)}
+.ckgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+@media(max-width:600px){.ckgrid{grid-template-columns:1fr}}
+.mono{font-family:var(--mono)}
+.hr .nm{flex:1}.hr .eg{font:12px var(--mono);color:var(--mute);white-space:nowrap}
+.hr .st.on{color:var(--ok)}.hr .st.mid{color:#e9b83d}.hr .st.off{color:var(--bad)}
+/* ===== D1 usage meters ===== */
+.mt{display:grid;gap:4px}.mh{display:flex;justify-content:space-between}.mh b{font-family:var(--mono)}
+.mb{height:10px;border-radius:99px;background:rgba(255,255,255,.08);overflow:hidden}.mb i{display:block;height:100%;border-radius:99px;transition:width .4s}
+.mt small{color:var(--mute);font-family:var(--mono);font-size:12px}
+/* ===== Wider layout ===== */
+body{font-size:16px}
+main{max-width:1240px;padding:44px 32px 100px}
+h2{font-size:38px}.sub{font-size:16px;max-width:80ch}
+.tally{font-size:22px}.tally b{font-size:26px}
+.nav{padding:9px 24px;font-size:15px}
+.ledgers{grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:24px}
+.led{padding:22px}.led h3{font-size:17px}
+.lr{font-size:15.5px;padding:10px 12px}
+.rr{font-size:15.5px;padding:12px 0}.rr .g,.rr .m{font-size:13px}
+.rows{display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:16px;background:none;border:0;padding:0;box-shadow:none;-webkit-backdrop-filter:none;backdrop-filter:none}
+.item,.rows .item:last-child{background:rgba(0,0,0,.30);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:20px;box-shadow:0 12px 36px rgba(0,0,0,.16);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px)}
+.item .name{font-size:18px}
+@media(max-width:600px){main{padding:32px 16px 80px}.rows{grid-template-columns:1fr}}
+</style>
+</head>
+<body class="locked">
+<div id="bg" aria-hidden="true"><video muted loop autoplay playsinline preload="auto"></video></div>
+<header>
+  <nav class="pill" aria-label="Pages">
+    <button class="nav" data-p="executes">Executes</button>
+    <button class="nav" data-p="scripts">Scripts</button>
+    <button class="nav" data-p="auto">Auto execute</button>
+    <button class="nav" data-p="hoppers" style="display:none">SAE HOPPERS</button>
+    <button class="nav" data-p="admin" style="display:none">Admin</button>
+  </nav>
+</header>
+<main id="main"></main>
+<script>
+// Put your Cloudflare Worker address here (no slash at the end).
+var WORKER = "https://script-hub.worstasaiya.workers.dev";
+// Your Hawkhost relay (no slash at the end). Used only for the live Accounts list.
+var HOPPERS = "https://come-feelings-incurred-degrees.trycloudflare.com";
+// How often the SAE HOPPERS page asks the relay for the list (milliseconds). Each ask is tiny and the relay
+// keeps everything in memory, so 5000 is cheap. Only the newest request is ever in flight.
+var HOPPER_POLL_MS = 5000;
+// Anyone who enters the wrong admin password is sent here.
+var DENIED_URL = "https://discord.gg/w0rst";
 
--- same monochrome ash palette as the main hub (WORSTHUB.lua): near-black window, grey ash stroke,
--- bright ash-white for the one "good" accent, warm ember for the one "bad / warning" accent.
-local C = {
-    bg = Color3.fromRGB(8,8,8),
-    surface = Color3.fromRGB(14,14,14),
-    border = Color3.fromRGB(105,105,105),
-    accent = Color3.fromRGB(235,235,235),
-    text = Color3.fromRGB(242,242,242),
-    muted = Color3.fromRGB(150,150,150),
-    green = Color3.fromRGB(255,255,255),   -- success (kept the name "green" so nothing else needs renaming)
-    red = Color3.fromRGB(255,175,120),     -- error / warm ember accent (same tone the hub's glow uses)
-    yellow = Color3.fromRGB(255,175,120),  -- warning, same ember tone
+var page = "executes", scripts = null, edit = null, msg = "", bad = false, timer = 0;
+var targets = [], listeners = null, tgtOpen = false;   // "Run on": targets = chosen account ids, empty = All
+var $ = function (id) { return document.getElementById(id); };
+function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+
+// Asks for the admin password once per browser tab and sends it with every request.
+// If the Worker says "locked" (wrong password), the saved password is forgotten and the
+// auto-refresh stops, so refresh the page to be asked again.
+var PW = sessionStorage.getItem("pw");   // only an ADMIN password is ever saved; guests and VIPs are asked again on refresh
+function api(path, body) {
+  if (PW === null) PW = prompt("Password (leave empty to continue as a guest)") || "";   // empty / cancel / wrong = guest
+  var o = { cache: "no-store", headers: { "x-admin-key": PW } };
+  if (body) { o.method = "POST"; o.headers["Content-Type"] = "application/json"; o.body = JSON.stringify(body); }
+  return fetch(WORKER + path, o).then(function (r) {
+    if (r.status === 401) {   // wrong password: forget it and send them away instead of showing the site
+      sessionStorage.removeItem("pw"); clearInterval(timer);
+      location.replace(DENIED_URL);
+      return new Promise(function () {});
+    }
+    document.body.classList.remove("locked");   // password accepted: show the site
+    return r.json().then(function (d) {
+      d._ok = r.ok;
+      if (r.status === 401) d.error = "Wrong admin password. Refresh the page to try again.";
+      return d;
+    });
+  });
+}
+function say(t, b) { msg = t; bad = !!b; var m = $("msg"); if (m) { m.textContent = t; m.className = "msg" + (b ? " bad" : ""); } }
+
+/* ---------- SAE HOPPERS page (admin only; data comes from the Hawkhost relay) ---------- */
+var hp = null, hpCtl = null;
+function stopHoppers() { if (hpCtl) { hpCtl.abort(); hpCtl = null; } }
+function loadHoppers() {
+  if (role !== "admin" || document.hidden) return;   // nothing is fetched while the tab is in the background
+  stopHoppers();                                      // drop the previous request: only the newest one is in flight
+  var ctl = hpCtl = new AbortController();
+  fetch(HOPPERS + "/hoppers", { cache: "no-store", headers: { "x-admin-key": PW }, signal: ctl.signal })
+    .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+    .then(function (d) { if (hpCtl !== ctl) return; hpCtl = null; hp = d; drawHoppers(); })
+    .catch(function (e) { if ((e && e.name === "AbortError") || hpCtl !== ctl) return; hpCtl = null; hp = { error: true }; drawHoppers(); });
+}
+function hopTick() { loadHoppers(); loadClients(); loadFree(); }
+document.addEventListener("visibilitychange", function () { if (!document.hidden && page === "hoppers") hopTick(); });
+
+// Admin calls to the relay (client keys). Always resolves: { _ok, ...json } or { _ok:false, error }.
+function relay(path, body) {
+  var ctl = new AbortController(), t = setTimeout(function () { ctl.abort(); }, 8000);
+  var o = { cache: "no-store", headers: { "x-admin-key": PW }, signal: ctl.signal };
+  if (body) { o.method = "POST"; o.headers["Content-Type"] = "application/json"; o.body = JSON.stringify(body); }
+  return fetch(HOPPERS + path, o).then(function (r) {
+    clearTimeout(t);
+    return r.json().catch(function () { return {}; }).then(function (d) { d._ok = r.ok; return d; });
+  }, function () { clearTimeout(t); return { _ok: false, error: "Could not reach the relay." }; });
 }
 
-local function send(url, body)
-    local req = (syn and syn.request) or (http and http.request) or http_request or request or (fluxus and fluxus.request)
-    if not req then return nil, "This executor can't make web requests." end
-    local ok, res = pcall(req, {
-        Url = url, Method = "POST",
-        Headers = { ["Content-Type"] = "application/json" },
-        Body = HttpService:JSONEncode(body)
-    })
-    if not ok or type(res) ~= "table" then return nil, "Could not reach the server." end
-    local decoded
-    pcall(function() decoded = HttpService:JSONDecode(res.Body) end)
-    return decoded or {}, nil, tonumber(res.StatusCode or res.Status)
-end
+function fmtSpan(s) {
+  s = Math.max(0, Math.floor(s));
+  var d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+  return d ? d + "d " + h + "h" : h ? h + "h " + m + "m" : m + "m";
+}
+function hopperRow(a) {
+  var cls = !a.online ? "off" : a.status === "Scanning" ? "on" : "mid";
+  return '<div class="hr"><span class="nm">' + esc(a.name) + '</span>'
+    + (a.online ? '<span class="eg">' + Number(a.eggs || 0).toLocaleString() + ' eggs</span>' : "")
+    + '<span class="st ' + cls + '">' + esc(a.status) + (!a.online && a.age != null ? ' · ' + agoTxt(Date.now() - a.age) : '') + '</span></div>';
+}
+function hopperList(title, rows, empty) {
+  return '<section class="led"><h3>' + title + ' <small style="color:var(--mute);font-weight:400">' + rows.length + '</small></h3>'
+    + (rows.length ? rows.map(hopperRow).join("") : '<div class="empty">' + empty + '</div>') + '</section>';
+}
+// The page is built once (shell). Polling only refreshes #hpTop and #ckList, so a half-typed Create Key form is never wiped.
+function hpShell() {
+  if ($("hpTop")) return;
+  $("main").className = "";
+  $("main").innerHTML = head("SAE HOPPERS", "Live status of every SAE hopper account, and the client keys that decide who gets their alerts.")
+    + '<div id="hpTop"></div>'
+    + '<section class="form" id="frBox" style="margin-top:36px">'
+    + '<div class="bar" style="justify-content:space-between;align-items:center;margin:0"><h3 style="margin:0;font-size:20px">Free version</h3><span class="state on" id="frVal">…</span></div>'
+    + '<input id="frSlider" type="range" min="0" max="300" step="1" value="0" disabled style="padding:0;border:0;background:none;accent-color:var(--blue);cursor:pointer">'
+    + '<small id="frInfo" style="color:var(--mute)">Loading…</small></section>'
+    + '<div id="ckBox"></div>';
+  drawClients();
+}
+function drawHoppers() {
+  if (page !== "hoppers") return;
+  hpShell();
+  var h = "";
+  if (hp === null) h = '<div class="empty">Loading…</div>';
+  else if (hp.error) h = '<div class="msg bad">Could not reach the relay. Check that the HOPPERS address in worstsite.html is right and the tunnel service is running on the server.</div>';
+  else {
+    var on = hp.accounts.filter(function (a) { return a.online; }), off = hp.accounts.filter(function (a) { return !a.online; });
+    h = '<p class="tally"><b>' + hp.online + '</b> of <b>' + hp.total + '</b> hoppers online.</p>'
+      + '<div class="bar"><button class="btn ghost" data-a="hprefresh">Refresh now</button></div>'
+      + '<div class="ledgers">' + hopperList("Online", on, "No hoppers online right now.") + hopperList("Offline", off, "None. Every hopper that has reported is online.") + '</div>';
+  }
+  $("hpTop").innerHTML = h;
+  if (hp !== null) $("main").className = "still";   // later refreshes redraw without replaying the fade-in
+}
 
-local executor = "Unknown"
-pcall(function() if identifyexecutor then executor = tostring(identifyexecutor()) end end)
+/* ---------- Client keys (admin only): who may use the joiner, for how long, on how many bots ---------- */
+var ck = null, ckOpen = false, ckBusy = false;
+function ckSay(t, b) { var m = $("ckMsg"); if (m) { m.textContent = t; m.className = "msg" + (b ? " bad" : ""); } }
+function loadClients() {
+  if (role !== "admin" || document.hidden || ckBusy || page !== "hoppers") return;
+  ckBusy = true;
+  relay("/admin/clients").then(function (d) {
+    ckBusy = false;
+    ck = d._ok && d.ok ? d : { error: d.error || "Could not load client keys. Is the relay updated to v4?" };
+    drawClients();
+  });
+}
+function ckItem(c) {
+  var id = ' data-id="' + esc(c.key) + '"';
+  var st = c.status === "unused" ? "Not used yet · lasts " + fmtSpan(c.durationMs / 1000)
+    : c.status === "expired" ? "Expired" : fmtSpan(c.secondsLeft) + " left";
+  return '<div class="item"><div><div class="name">' + esc(c.label || "Unnamed") + '</div>'
+    + '<small class="mono">' + esc(c.key) + '</small>'
+    + '<small><span class="state' + (c.status === "active" ? " on" : "") + '">' + st + '</span>' + (c.connected ? ' · <span class="state on">online now</span>' : "") + '</small>'
+    + '<small>Bots ' + c.assigned.length + '/' + c.bots + (c.assigned.length ? ' · ' + esc(c.assigned.join(", ")) : "") + '</small></div>'
+    + '<div class="acts more"><button class="btn ghost" data-a="ckcopy"' + id + '>Copy key</button>'
+    + '<button class="btn ghost" data-a="ckbots"' + id + ' data-n="' + c.bots + '">Set bots</button>'
+    + '<button class="btn ghost" data-a="ckadd"' + id + '>Add time</button>'
+    + '<button class="btn ghost del" data-a="ckdel"' + id + '>Delete</button></div></div>';
+}
+function drawClients() {
+  var box = $("ckBox"); if (!box) return;
+  if (!$("ckList")) box.innerHTML = '<div class="bar" style="justify-content:space-between;align-items:center;margin-top:36px"><h3 style="margin:0;font-size:20px">Client keys</h3><button class="btn" data-a="ckopen">Create Key</button></div>'
+    + '<div id="ckForm"></div><p class="sub" id="ckPool" style="margin:0 0 14px"></p><div id="ckList"></div><div class="msg" id="ckMsg"></div>';
+  drawCkForm();
+  var l = $("ckList");
+  if (ck === null) { l.innerHTML = '<div class="empty">Loading…</div>'; return; }
+  if (ck.error) { l.innerHTML = '<div class="msg bad">' + esc(ck.error) + '</div>'; $("ckPool").textContent = ""; return; }
+  $("ckPool").textContent = ck.pool.online + " bots online · " + ck.pool.assigned + " in use by clients · " + ck.pool.free + " not used by anyone";
+  l.innerHTML = ck.clients.length ? '<div class="rows">' + ck.clients.map(ckItem).join("") + '</div>' : '<div class="empty">No client keys yet. Press Create Key.</div>';
+}
+// the form is drawn only when opened / closed (never by polling), so typing is never lost
+var ckFormShown = false;
+function drawCkForm() {
+  var f = $("ckForm"); if (!f || ckFormShown === ckOpen) return;
+  ckFormShown = ckOpen;
+  f.innerHTML = !ckOpen ? "" : '<div class="form">'
+    + '<input id="ckLabel" maxlength="40" placeholder="Client name (so you can tell them apart)" autocomplete="off">'
+    + '<input id="ckCustom" maxlength="64" placeholder="Custom key (optional, leave empty to generate one)" autocomplete="off">'
+    + '<div class="ckgrid"><div><small>Max bots for this client</small><input id="ckBots" type="number" min="1" max="500" value="3"></div>'
+    + '<div><small>Lasts</small><input id="ckDur" type="number" min="1" value="7"></div>'
+    + '<div><small>Unit</small><select id="ckUnit"><option value="24">days</option><option value="1">hours</option></select></div></div>'
+    + '<small>The timer starts when the client first logs in, not when you create the key.</small>'
+    + '<div class="acts"><button class="btn" data-a="cksave">Create key</button><button class="btn ghost" data-a="ckcancel">Cancel</button></div></div>';
+}
+function ckAction(a, b) {
+  var id = b.dataset.id;
+  if (a === "ckopen") { ckOpen = !ckOpen; drawCkForm(); if (ckOpen && $("ckLabel")) $("ckLabel").focus(); }
+  else if (a === "ckcancel") { ckOpen = false; drawCkForm(); }
+  else if (a === "cksave") {
+    b.disabled = true;
+    relay("/admin/clients/create", { label: $("ckLabel").value, key: $("ckCustom").value, bots: Number($("ckBots").value), hours: Number($("ckDur").value) * Number($("ckUnit").value) }).then(function (d) {
+      b.disabled = false;
+      if (!d._ok || !d.ok) { ckSay(d.error || "Could not create the key.", true); return; }
+      ckOpen = false; drawCkForm(); ckSay("Created. The key is " + d.key + " (also in the list below).", false); ckBusy = false; loadClients();
+    });
+  }
+  else if (a === "ckcopy") {
+    if (navigator.clipboard) navigator.clipboard.writeText(id).then(function () { ckSay("Copied " + id, false); }, function () { prompt("Copy this key:", id); });
+    else prompt("Copy this key:", id);
+  }
+  else if (a === "ckbots") {
+    var v = prompt("Maximum bots this client can get alerts from?", b.dataset.n); if (v === null) return;
+    relay("/admin/clients/update", { key: id, bots: Number(v) }).then(function (d) { ckSay(d._ok && d.ok ? "Updated." : (d.error || "Could not update."), !(d._ok && d.ok)); ckBusy = false; loadClients(); });
+  }
+  else if (a === "ckadd") {
+    var h = prompt("Add how many hours? 24 = one day. Use a negative number to remove time.", "24"); if (h === null) return;
+    relay("/admin/clients/update", { key: id, addHours: Number(h) }).then(function (d) { ckSay(d._ok && d.ok ? "Time updated." : (d.error || "Could not update."), !(d._ok && d.ok)); ckBusy = false; loadClients(); });
+  }
+  else if (a === "ckdel" && confirm("Delete this key? The client is logged out right away.")) {
+    relay("/admin/clients/delete", { key: id }).then(function (d) { ckSay(d._ok && d.ok ? "Deleted." : (d.error || "Could not delete."), !(d._ok && d.ok)); ckBusy = false; loadClients(); });
+  }
+}
 
-local function check(key)
-    local data, err, status = send(WORKER .. "/loader/run", {
-        key = key, placeId = game.PlaceId, uid = LocalPlayer.UserId, executor = executor,
-        username = LocalPlayer.Name, display = LocalPlayer.DisplayName
-    })
-    if not data then return nil, err, nil end
-    if status == 401 then
-        return nil, data.error or "Key expired or invalid. Join Discord for a new key.", 401
-    end
-    if not data.ok then return nil, data.error or "Something went wrong. Try again.", status or 0 end
-    return data
-end
+/* ---------- Free version slider: the MOST an egg can be worth for people who are NOT logged in (and they get it 2s late) ----------
+   Far left = off, far right = no limit, in between $1K/s .. $1Qa/s on the same log scale as the joiner's value slider. */
+var fr = null, frBusy = false, frSaving = false, FR_STEPS = 300;
+function frToValue(s) {
+  s = Number(s); if (s <= 0) return 0; if (s >= FR_STEPS) return 1e18;
+  return Number(Math.pow(10, 3 + (s - 1) / (FR_STEPS - 2) * 12).toPrecision(3));
+}
+function frToStep(v) {
+  v = Number(v); if (!(v > 0)) return 0; if (v >= 1e18) return FR_STEPS;
+  return Math.max(1, Math.min(FR_STEPS - 1, Math.round(1 + (Math.log10(v) - 3) / 12 * (FR_STEPS - 2))));
+}
+function frFmt(v) {
+  if (!(v > 0)) return "Off"; if (v >= 1e18) return "No limit";
+  var U = [[1e15, "Qa"], [1e12, "T"], [1e9, "B"], [1e6, "M"], [1e3, "K"]];
+  for (var i = 0; i < U.length; i++) if (v >= U[i][0]) return "$" + Number((v / U[i][0]).toPrecision(3)) + U[i][1] + "/s";
+  return "$" + v + "/s";
+}
+function frText() {
+  var s = $("frSlider"), v = $("frVal"); if (!s || !v) return;
+  v.textContent = frFmt(frToValue(s.value));
+}
+function drawFree() {
+  var s = $("frSlider"), i = $("frInfo"); if (!s || !i) return;
+  if (fr === null) { i.textContent = "Loading…"; return; }
+  if (fr.error) { s.disabled = true; i.style.color = "var(--bad)"; i.textContent = fr.error; return; }
+  s.disabled = false;
+  if (document.activeElement !== s && !frSaving) { s.value = frToStep(fr.max); $("frVal").textContent = frFmt(fr.max); }   // show the exact saved value
+  else frText();
+  i.style.color = "var(--mute)";
+  var who = fr.online + " free user" + (fr.online === 1 ? "" : "s") + " connected.";
+  i.textContent = !(fr.max > 0) ? "Off. Anyone without a key sees nothing."
+    : fr.max >= 1e18 ? "People without a key see every egg, " + (fr.delayMs / 1000) + "s after paying clients. " + who
+    : "People without a key only see eggs worth up to " + frFmt(fr.max) + ", " + (fr.delayMs / 1000) + "s after paying clients. Anything worth more is hidden from them. " + who;
+}
+function loadFree() {
+  if (role !== "admin" || document.hidden || frBusy || frSaving || page !== "hoppers") return;
+  frBusy = true;
+  relay("/admin/free").then(function (d) {
+    frBusy = false;
+    fr = d._ok && d.ok ? d : { error: d.error || "Could not load the free version setting. Is the relay updated?" };
+    drawFree();
+  });
+}
+document.addEventListener("input", function (e) { if (e.target && e.target.id === "frSlider") frText(); });
+document.addEventListener("change", function (e) {
+  if (!e.target || e.target.id !== "frSlider") return;
+  frSaving = true;
+  relay("/admin/free", { max: frToValue(e.target.value) }).then(function (d) {
+    frSaving = false;
+    if (!(d._ok && d.ok)) { var i = $("frInfo"); if (i) { i.style.color = "var(--bad)"; i.textContent = d.error || "Could not save."; } return; }
+    loadFree();
+  });
+});
 
--- Network hiccups / Cloudflare errors / 5xx must NOT be treated as "key required". Retry a few times,
--- and let the caller look at `status`: only 401 (and 429) mean the server really wants a key.
-local function checkRetry(key)
-    local data, err, status
-    for i = 1, 3 do
-        data, err, status = check(key)
-        if data or status == 401 or status == 429 then break end
-        if i < 3 then task.wait(i * 1.5) end
-    end
-    return data, err, status
-end
-local function keyWanted(status) return status == 401 or status == 429 end
+/* ---------- Executes ---------- */
+function list(title, rows, fmt) {
+  var max = rows.reduce(function (m, r) { return Math.max(m, r.n); }, 1);
+  return '<section class="led"><h3>' + title + '</h3>' + (rows.length ? rows.map(function (r) {
+    return '<div class="lr"><i style="width:' + Math.round(r.n / max * 100) + '%"></i><span class="k">' + esc(fmt(r.k, r)) + '</span><span class="n">' + r.n.toLocaleString() + '</span></div>';
+  }).join("") : '<div class="empty">Nothing yet.</div>') + '</section>';
+}
+function agoTxt(t) { var s = Math.max(0, Math.round((Date.now() - t) / 1000)); return s < 60 ? s + "s ago" : s < 3600 ? Math.floor(s / 60) + "m ago" : s < 86400 ? Math.floor(s / 3600) + "h ago" : Math.floor(s / 86400) + "d ago"; }
+function recentList(rows) {   // the latest players who ran the loadstring
+  return '<section class="rec"><h3>Accounts</h3>' + (rows.length ? rows.map(function (r) {
+    var nm = r.username ? esc(r.username) + (r.display && r.display !== r.username ? '<small>' + esc(r.display) + '</small>' : "") : '<small>unknown (no name saved)</small>';
+    return '<div class="rr"><span class="u">' + nm + '</span><span class="g">' + (r.place_id ? esc(r.place_name || "Place " + r.place_id) : "") + (r.executor ? " · " + esc(r.executor) : "") + '</span><span class="m">Last execute ' + agoTxt(r.t) + '</span></div>';
+  }).join("") : '<div class="empty">Nothing yet.</div>') + '</section>';
+}
+function loadExecutes() {
+  api("/admin/executes").then(function (d) {
+    if (page !== "executes") return;
+    if (!d._ok) { $("main").innerHTML = head("Executes", "") + '<div class="msg bad">' + esc(d.error || "Could not reach the Worker. Check the WORKER address in worstsite.html.") + '</div>'; return; }
+    $("main").innerHTML = head("Executes", "Where the loadstring was run from, and who ran it last.")
+      + '<p class="tally"><b>' + d.total.toLocaleString() + '</b> executes in total, <b>' + d.last24h.toLocaleString() + '</b> in the last 24 hours.</p>'
+      + '<div class="ledgers">' + list("By game", d.places, function (k, r) { return r && r.name ? r.name : (k ? "Place " + k : "Unknown place"); }) + list("By country", d.countries, function (k) { return k || "Unknown"; }) + list("By executor", d.executors || [], function (k) { return k || "Unknown"; }) + '</div>' + recentList(d.recent || []);
+  }).catch(function () { $("main").innerHTML = head("Executes", "") + '<div class="msg bad">Could not reach the Worker. Check the WORKER address in worstsite.html.</div>'; });
+}
 
-local function runScripts(data)
-    for _, s in ipairs(data.scripts or {}) do
-        task.spawn(function()
-            local fn, cerr = loadstring(s.code)
-            if not fn then
-                warn("[WORST AUTH] " .. tostring(s.name) .. " failed to load: " .. tostring(cerr))
-                return
-            end
-            local ok, rerr = pcall(fn)
-            if not ok then warn("[WORST AUTH] " .. tostring(s.name) .. " errored: " .. tostring(rerr)) end
-        end)
-    end
-end
+/* ---------- Scripts + Auto execute ---------- */
+function head(t, s) { return '<h2>' + t + '</h2><p class="sub">' + s + '</p>'; }
+function loadScripts() { return api("/admin/scripts").then(function (d) { scripts = d._ok ? d.scripts : []; if (!d._ok) say(d.error || "Could not load scripts.", true); }); }
+function itemHtml(s, auto) {
+  if (role !== "admin") return '<div class="item"><div><div class="name">' + esc(s.label) + '</div><small>' + esc(s.desc || "No description") + '</small></div></div>';
+  var id = ' data-id="' + esc(s.id) + '"';
+  var right = auto
+    ? '<span class="state' + (s.on ? " on" : "") + '">' + (s.on ? "Live" : "Off") + '</span><button type="button" class="sw" role="switch" aria-checked="' + (s.on ? "true" : "false") + '" aria-label="Auto execute ' + esc(s.label) + '" data-a="toggle"' + id + '></button>'
+    : '<button class="btn" data-a="run"' + id + '>Run</button>';
+  return '<div class="item"><div><div class="name">' + esc(s.label) + '</div><small>' + esc(s.desc || "No description") + '</small></div>'
+    + '<div class="acts right">' + right + '</div>'
+    + '<div class="acts more"><button class="btn ghost" data-a="edit"' + id + '>Edit</button>'
+    + '<button class="btn ghost" data-a="move"' + id + '>' + (auto ? "Move to Scripts" : "Move to Auto execute") + '</button>'
+    + '<button class="btn ghost del" data-a="del"' + id + '>Delete</button></div></div>';
+}
+/* ---------- "Run on" dropdown (Scripts page): all accounts, or only the ones you tick ---------- */
+function loadListeners() { return api("/admin/listeners").then(function (d) { listeners = d._ok ? d.accounts : []; drawTgt(); }); }
+function tgtLabel() { return targets.length ? "<b>" + targets.length + "</b> account" + (targets.length > 1 ? "s" : "") + " selected" : "<b>All</b> accounts"; }
+function tgtHtml() {
+  var h = '<button type="button" class="tbtn" data-a="tgtopen">Run on: ' + tgtLabel() + ' ▾</button>';
+  if (!tgtOpen) return h;
+  h += '<div class="tpanel"><button type="button" class="topt' + (targets.length ? "" : " on") + '" data-a="tgtall"><span class="bx"></span><span class="nm">All accounts</span></button><div class="tdiv"></div>';
+  if (listeners === null) h += '<div class="tnote">Loading…</div>';
+  else if (!listeners.length) h += '<div class="tnote">No accounts are listening right now. They show up here a minute after they run the script.</div>';
+  else h += listeners.map(function (a) {
+    var on = targets.indexOf(a.uid) >= 0;
+    return '<button type="button" class="topt' + (on ? " on" : "") + '" data-a="tgtpick" data-uid="' + esc(a.uid) + '"><span class="bx"></span><span class="nm">' + esc(a.username || a.uid) + (a.display && a.display !== a.username ? '<small>' + esc(a.display) + '</small>' : "") + '</span>' + (a.place_id ? '<span class="pl">' + esc(a.place_id) + '</span>' : "") + '</button>';
+  }).join("");
+  return h + '<div class="tdiv"></div><button type="button" class="topt" data-a="tgtrefresh"><span class="nm">Refresh list</span></button></div>';
+}
+function drawTgt() { var el = $("tgt"); if (el) el.innerHTML = tgtHtml(); }
+function drawList() {
+  if (page !== "auto" && page !== "scripts") return;
+  var auto = page === "auto";
+  var h = head(auto ? "Auto execute" : "Scripts", auto ? "A live script runs every time anyone runs the loadstring." : "Your saved scripts. Move one to Auto execute when it should go out to players.")
+    + (role === "admin" ? '<div class="bar"><button class="btn" data-a="new">New script</button>' + (auto ? "" : '<div class="tgt" id="tgt">' + tgtHtml() + '</div>') + '</div>' : "");
+  if (edit) h += '<div class="form"><input id="edName" maxlength="60" placeholder="Script name" value="' + esc(edit.label) + '" autocomplete="off">'
+    + '<input id="edDesc" maxlength="120" placeholder="Short description (optional)" value="' + esc(edit.desc) + '" autocomplete="off">'
+    + '<textarea id="edCode" spellcheck="false" wrap="off" placeholder="-- paste your Lua here">' + esc(edit.code) + '</textarea>'
+    + '<div class="acts"><button class="btn" data-a="save">Save script</button><button class="btn ghost" data-a="cancel">Cancel</button></div></div>';
+  var items = (scripts || []).filter(function (s) { return s.auto === auto; });
+  if (scripts === null) h += '<div class="empty">Loading…</div>';
+  else if (!items.length && !edit) h += '<div class="empty">' + (auto ? "No scripts here yet. Move one from Scripts, or press New script. Saved scripts stay off until you switch them on." : "No scripts yet. Press New script and paste one in.") + '</div>';
+  else h += '<div class="rows">' + items.map(function (s) { return itemHtml(s, auto); }).join("") + '</div>';
+  $("main").innerHTML = h + '<div class="msg' + (bad ? " bad" : "") + '" id="msg">' + esc(msg) + '</div>';
+}
+function find(id) { return (scripts || []).filter(function (s) { return s.id === id; })[0]; }
+function reload() { return loadScripts().then(drawList); }
+document.addEventListener("click", function (e) {
+  if (tgtOpen && !e.target.closest("#tgt")) { tgtOpen = false; drawTgt(); }
+  var n = e.target.closest(".nav");
+  if (n) { go(n.dataset.p); return; }
+  var b = e.target.closest("[data-a]"); if (!b) return;
+  var a = b.dataset.a, s = find(b.dataset.id);
+  if (a.indexOf("ck") === 0) { ckAction(a, b); return; }
+  if (a.indexOf("vip") === 0) { vipAction(a, b); return; }
+  if (a.indexOf("key") === 0) { keyAction(a, b); return; }
+  if (a === "ghrefresh") { b.disabled = true; loadWatch(true); return; }
+  if (a === "hprefresh") { hopTick(); }
+  else if (a === "tgtopen") { tgtOpen = !tgtOpen; drawTgt(); if (tgtOpen) loadListeners(); }
+  else if (a === "tgtall") { targets = []; drawTgt(); }
+  else if (a === "tgtpick") { var u = b.dataset.uid, i = targets.indexOf(u); if (i >= 0) targets.splice(i, 1); else targets.push(u); drawTgt(); }
+  else if (a === "tgtrefresh") { listeners = null; drawTgt(); loadListeners(); }
+  else if (a === "new") { edit = { id: "", label: "", desc: "", code: "", auto: page === "auto" }; drawList(); $("edName").focus(); }
+  else if (a === "cancel") { edit = null; drawList(); }
+  else if (a === "edit" && s) { edit = { id: s.id, label: s.label, desc: s.desc, code: s.code, auto: s.auto }; drawList(); $("edName").focus(); }
+  else if (a === "save") {
+    b.disabled = true;
+    api("/admin/scripts", { id: edit.id, label: $("edName").value, desc: $("edDesc").value, code: $("edCode").value, auto: edit.auto }).then(function (d) {
+      if (!d._ok) { b.disabled = false; say(d.error || "Could not save.", true); return; }
+      edit = null; say("Saved.", false); return reload();
+    });
+  }
+  else if (a === "toggle" && s) api("/admin/scripts/auto", { id: s.id, enabled: !s.on }).then(function (d) { say(d._ok ? (s.on ? "Switched off." : "Live. It runs on every execute.") : d.error, !d._ok); return reload(); });
+  else if (a === "run" && s) { b.disabled = true; api("/admin/run", { id: s.id, targets: targets }).then(function (d) { b.disabled = false; say(d._ok ? "Sent “" + s.label + "” to " + (targets.length ? targets.length + " selected account" + (targets.length > 1 ? "s" : "") : "all listening accounts") + ". They run it within about 10 minutes." : d.error, !d._ok); }); }
+  else if (a === "move" && s) api("/admin/scripts/move", { id: s.id, auto: !s.auto }).then(function (d) { say(d._ok ? (s.auto ? "Moved to Scripts." : "Moved to Auto execute. It stays off until you switch it on.") : d.error, !d._ok); return reload(); });
+  else if (a === "del" && s && confirm("Delete “" + s.label + "”?")) api("/admin/scripts/delete", { id: s.id }).then(function () { say("Deleted.", false); return reload(); });
+});
 
-local POLL_FAST = 30   -- seconds between checks while scripts are being pushed (was 10: far too many Worker requests)
-local POLL_SLOW = 60   -- seconds between checks when nothing new has come in for a while
-local function listen(key)
-    if not (getgenv and getgenv().HubListen) then return end
-    task.spawn(function()
-        local since = nil
-        local wait_s = POLL_FAST
-        while true do
-            local data, _, status = send(WORKER .. "/loader/poll", { key = key, since = since })
-            if status == 401 then return end
-            if data and data.ok then
-                since = data.last
-                if data.runs and #data.runs > 0 then
-                    runScripts({scripts = data.runs})
-                    wait_s = POLL_FAST   -- something was pushed: stay quick in case more follows
-                else
-                    wait_s = math.min(POLL_SLOW, wait_s + 10)   -- idle: slowly stretch to the slow interval
-                end
-            end
-            task.wait(wait_s)
-        end
-    end)
-end
-
-local function readSaved()
-    if not (SAVE_KEY and readfile and isfile) then return nil end
-    local ok, v = pcall(function() return isfile(KEY_FILE) and readfile(KEY_FILE) or nil end)
-    return ok and v and v ~= "" and v or nil
-end
-local function writeSaved(key)
-    if SAVE_KEY and writefile then pcall(writefile, KEY_FILE, key) end
-end
-
-local function round(obj, radius)
-    local c = Instance.new("UICorner")
-    c.CornerRadius = UDim.new(0, radius)
-    c.Parent = obj
-end
-local function outline(obj, color)
-    local s = Instance.new("UIStroke")
-    s.Color = color
-    s.Thickness = 1
-    s.Parent = obj
-    return s
-end
-local function textLabel(parent, content, size, color, bold)
-    local t = Instance.new("TextLabel")
-    t.BackgroundTransparency = 1
-    t.Text = content
-    t.TextSize = size
-    t.TextColor3 = color
-    t.Font = bold and Enum.Font.GothamBold or Enum.Font.Gotham
-    t.TextXAlignment = Enum.TextXAlignment.Left
-    t.Parent = parent
-    return t
-end
-local function button(parent, label, position, size, color, foreground)
-    local b = Instance.new("TextButton")
-    b.Position = position
-    b.Size = size
-    b.BackgroundColor3 = color
-    b.BorderSizePixel = 0
-    b.AutoButtonColor = true
-    b.Text = label
-    b.TextColor3 = foreground
-    b.TextSize = 13
-    b.Font = Enum.Font.GothamBold
-    b.Parent = parent
-    round(b, 9)
-    return b
-end
-
--- Gives a UIStroke the same black-to-white shimmer gradient that slowly spins around the main hub's
--- window border. Returns a handle so the caller can stop it (e.g. when the popup closes).
-local function ashBorder(st, speed)
-    local g = Instance.new("UIGradient")
-    g.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0.00, Color3.fromRGB(35, 35, 35)),
-        ColorSequenceKeypoint.new(0.50, Color3.fromRGB(215, 215, 215)),
-        ColorSequenceKeypoint.new(1.00, Color3.fromRGB(35, 35, 35)),
-    })
-    g.Parent = st
-    local rot = math.random() * 360
-    local conn
-    conn = RunService.Heartbeat:Connect(function(dt)
-        if not g.Parent then conn:Disconnect() return end
-        rot = (rot + dt * (speed or 35)) % 360
-        g.Rotation = rot
-    end)
-    return conn
-end
-
--- A handful of slow-rising ash / ember particles inside a clipped frame, the same look (toned down) as
--- the hub's background effect. cfg.parent must clip descendants (the popup's CanvasGroup already does).
-local function emberField(parent, w, h, count)
-    local COOL = Color3.fromRGB(130, 130, 130)
-    local parts = {}
-    for i = 1, (count or 12) do
-        local f = Instance.new("Frame")
-        f.AnchorPoint = Vector2.new(0.5, 0.5)
-        f.BackgroundTransparency = 1
-        f.BorderSizePixel = 0
-        f.Size = UDim2.fromOffset(3, 3)
-        f.ZIndex = 1
-        f.Parent = parent
-        round(f, 2)
-        parts[i] = { f = f, t = 0 }
-    end
-    local function respawn(p)
-        p.t, p.life = 0, 3 + math.random() * 4
-        p.x0 = math.random(0, w)
-        p.speed = 10 + math.random() * 18
-        p.sway = 4 + math.random() * 10
-        p.phase = math.random() * 6.28
-        p.size = 2 + math.random() * 2
-        p.warm = math.random() < 0.25
-        p.col = p.warm and C.red or COOL
-    end
-    for _, p in ipairs(parts) do respawn(p) p.t = math.random() * p.life end
-    local conn
-    conn = RunService.Heartbeat:Connect(function(dt)
-        if not parent.Parent then conn:Disconnect() return end
-        dt = math.min(dt, 0.1)
-        for _, p in ipairs(parts) do
-            p.t = p.t + dt
-            if p.t >= p.life then respawn(p) end
-            local k = p.t / p.life
-            local x = p.x0 + math.sin(p.phase + p.t * 1.4) * p.sway
-            local y = h - p.speed * p.t
-            local a = math.min(k / 0.15, 1) * (1 - math.max((k - 0.4) / 0.6, 0))
-            p.f.Position = UDim2.fromOffset(x, y)
-            p.f.BackgroundColor3 = p.col
-            p.f.BackgroundTransparency = 1 - a * 0.5
-            p.f.Visible = a > 0.02 and y > -10
-        end
-    end)
-    return conn
-end
-
-local function copyDiscord()
-    if type(setclipboard) == "function" then
-        local ok = pcall(setclipboard, DISCORD_URL)
-        return ok
-    end
-    return false
-end
-
--- Best-effort: ask Roblox to open the system browser on the invite link. If the person's OS/browser has
--- Discord's protocol registered, the browser itself offers to hand off to the Discord app from there.
--- GuiService:OpenBrowserWindow is a protected engine call Roblox normally reserves for itself, so whether
--- this works depends entirely on the executor - that's why it's wrapped in pcall and never assumed to work.
-local function openDiscordApp()
-    local launched = false
-    pcall(function()
-        local gs = game:GetService("GuiService")
-        if gs and typeof(gs.OpenBrowserWindow) == "function" then
-            gs:OpenBrowserWindow(DISCORD_URL)
-            launched = true
-        end
-    end)
-    return launched
-end
-
-local function popup(firstMessage, onKey)
-    local gui = Instance.new("ScreenGui")
-    gui.Name = "WORST_AUTH"
-    gui.ResetOnSpawn = false
-    gui.IgnoreGuiInset = true
-    gui.DisplayOrder = 999
-    gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-
-    local parent
-    pcall(function() if gethui then parent = gethui() end end)
-    if not parent then
-        local ok, core = pcall(function() return game:GetService("CoreGui") end)
-        if ok then parent = core end
-    end
-    if not parent then parent = LocalPlayer:WaitForChild("PlayerGui") end
-    local old = parent:FindFirstChild("WORST_AUTH")
-    if old then old:Destroy() end
-    gui.Parent = parent
-
-    local POPUP_W, POPUP_H = 340, 400
-
-    local main = Instance.new("CanvasGroup")
-    main.Name = "Main"
-    main.GroupTransparency = 1
-    main.AnchorPoint = Vector2.new(0.5, 0.5)
-    main.Position = UDim2.fromScale(0.5, 0.5)
-    main.Size = UDim2.fromOffset(POPUP_W, POPUP_H)
-    main.BackgroundColor3 = C.bg
-    main.BorderSizePixel = 0
-    main.Parent = gui
-    round(main, 22)   -- same rounding language as the hub's window (28) / panel (22), scaled down
-    local mainStroke = outline(main, Color3.new(1, 1, 1))
-    mainStroke.Thickness = 2
-    local ashConn = ashBorder(mainStroke, 35)
-
-    -- faint rising ash behind everything, same idea as the hub's background, far fewer particles
-    local emberConn = emberField(main, POPUP_W, POPUP_H, 10)
-
-    local scale = Instance.new("UIScale")
-    scale.Parent = main
-    local viewportConn
-    local animating = true
-    local function targetScale()
-        local camera = workspace.CurrentCamera
-        if not camera then return 1 end
-        local v = camera.ViewportSize
-        return math.max(0.45, math.min(1, (v.X - 24) / POPUP_W, (v.Y - 24) / POPUP_H))
-    end
-    scale.Scale = targetScale()
-    local camera = workspace.CurrentCamera
-    if camera then
-        viewportConn = camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
-            if not animating then scale.Scale = targetScale() end
-        end)
-    end
-    gui.Destroying:Connect(function()
-        if viewportConn then viewportConn:Disconnect() end
-        if ashConn then ashConn:Disconnect() end
-        if emberConn then emberConn:Disconnect() end
-    end)
-
-    local header = Instance.new("Frame")
-    header.ZIndex = 2
-    header.Position = UDim2.fromOffset(14, 8)
-    header.Size = UDim2.new(1, -28, 0, 46)
-    header.BackgroundTransparency = 1
-    header.Active = true
-    header.Parent = main
-
-    local logo = textLabel(header, "W", 22, Color3.new(1, 1, 1), true)
-    logo.ZIndex = 2
-    logo.Size = UDim2.fromOffset(34, 34)
-    logo.TextXAlignment = Enum.TextXAlignment.Center
-    local logoGrad = Instance.new("UIGradient")
-    logoGrad.Color = ColorSequence.new(Color3.fromRGB(2, 2, 2), Color3.fromRGB(191, 191, 191))
-    logoGrad.Rotation = 90
-    logoGrad.Parent = logo
-
-    local title = textLabel(header, 'WORST <font color="rgb(170,170,170)">AUTH</font>', 16, C.text, true)
-    title.ZIndex = 2
-    title.RichText = true
-    title.Position = UDim2.fromOffset(44, -2)
-    title.Size = UDim2.fromOffset(220, 22)
-    local subtitle = textLabel(header, "SECURE SCRIPT ACCESS", 9, C.muted)
-    subtitle.ZIndex = 2
-    subtitle.Position = UDim2.fromOffset(45, 19)
-    subtitle.Size = UDim2.fromOffset(220, 15)
-
-    local close = button(header, "×", UDim2.new(1, -24, 0, 1), UDim2.fromOffset(24, 24), C.surface, C.muted)
-    close.ZIndex = 2
-    close.TextSize = 18
-    close.MouseButton1Click:Connect(function() gui:Destroy() end)
-
-    local divider = Instance.new("Frame")
-    divider.ZIndex = 2
-    divider.Position = UDim2.fromOffset(14, 60)
-    divider.Size = UDim2.new(1, -28, 0, 1)
-    divider.BorderSizePixel = 0
-    divider.BackgroundColor3 = C.border
-    divider.Parent = main
-
-    -- circular ash badge, same construction as the hub's icon badges (gradient disc + glyph)
-    local badge = Instance.new("Frame")
-    badge.ZIndex = 2
-    badge.AnchorPoint = Vector2.new(0.5, 0)
-    badge.Position = UDim2.new(0.5, 0, 0, 74)
-    badge.Size = UDim2.fromOffset(54, 54)
-    badge.BackgroundColor3 = C.surface
-    badge.BorderSizePixel = 0
-    badge.Parent = main
-    do
-        local c = Instance.new("UICorner")
-        c.CornerRadius = UDim.new(1, 0)
-        c.Parent = badge
-    end
-    local badgeGrad = Instance.new("UIGradient")
-    badgeGrad.Color = ColorSequence.new(Color3.fromRGB(51, 51, 51), Color3.fromRGB(33, 33, 33))
-    badgeGrad.Rotation = 90
-    badgeGrad.Parent = badge
-    outline(badge, C.border)
-    local badgeGlyph = textLabel(badge, "W", 20, C.text, true)
-    badgeGlyph.ZIndex = 2
-    badgeGlyph.Size = UDim2.fromScale(1, 1)
-    badgeGlyph.TextXAlignment = Enum.TextXAlignment.Center
-
-    local heading = textLabel(main, "Authentication Required", 17, C.text, true)
-    heading.ZIndex = 2
-    heading.Position = UDim2.fromOffset(14, 140)
-    heading.Size = UDim2.new(1, -28, 0, 24)
-    heading.TextXAlignment = Enum.TextXAlignment.Center
-    local description = textLabel(main, "Enter your license key to unlock WORST Hub.", 11, C.muted)
-    description.ZIndex = 2
-    description.Position = UDim2.fromOffset(14, 164)
-    description.Size = UDim2.new(1, -28, 0, 18)
-    description.TextXAlignment = Enum.TextXAlignment.Center
-
-    local keyLabel = textLabel(main, "LICENSE KEY", 10, C.text, true)
-    keyLabel.ZIndex = 2
-    keyLabel.Position = UDim2.fromOffset(22, 196)
-    keyLabel.Size = UDim2.new(1, -44, 0, 16)
-
-    local input = Instance.new("TextBox")
-    input.ZIndex = 2
-    input.Position = UDim2.fromOffset(22, 216)
-    input.Size = UDim2.new(1, -44, 0, 40)
-    input.BackgroundColor3 = C.surface
-    input.BorderSizePixel = 0
-    input.PlaceholderText = "WORST-XXXX-XXXX-XXXX"
-    input.PlaceholderColor3 = C.muted
-    input.Text = ""
-    input.TextColor3 = C.text
-    input.TextSize = 12
-    input.Font = Enum.Font.Code
-    input.ClearTextOnFocus = false
-    input.Parent = main
-    round(input, 9)
-    outline(input, C.border)
-    local pad = Instance.new("UIPadding")
-    pad.PaddingLeft = UDim.new(0, 12)
-    pad.PaddingRight = UDim.new(0, 12)
-    pad.Parent = input
-
-    local verify = button(main, "VERIFY KEY", UDim2.fromOffset(22, 266), UDim2.new(1, -44, 0, 40), C.accent, C.bg)
-    verify.ZIndex = 2
-    local discord = button(main, "JOIN DISCORD", UDim2.fromOffset(22, 314), UDim2.new(1, -44, 0, 40), C.surface, C.text)
-    discord.ZIndex = 2
-    outline(discord, C.border)
-
-    local status = textLabel(main, "●  " .. (firstMessage or "Enter a key to continue"), 11, firstMessage and C.yellow or C.muted)
-    status.ZIndex = 2
-    status.Position = UDim2.fromOffset(22, 364)
-    status.Size = UDim2.new(1, -44, 0, 24)
-    status.TextWrapped = true
-    status.TextTruncate = Enum.TextTruncate.AtEnd
-    local function setStatus(message, color)
-        if not gui.Parent then return end
-        status.Text = "●  " .. tostring(message)
-        status.TextColor3 = color or C.muted
-    end
-
-    -- "JOIN DISCORD": copies the invite AND tries to hand off straight to the Discord app at the same time.
-    -- The hand-off is best-effort (see openDiscordApp above) so the status line always reflects what
-    -- actually happened rather than promising something that may not work on every executor.
-    discord.MouseButton1Click:Connect(function()
-        local copied = copyDiscord()
-        local launched = openDiscordApp()
-        if copied and launched then
-            setStatus("Invite copied - opening Discord...", C.green)
-        elseif launched then
-            setStatus("Opening Discord...", C.green)
-        elseif copied then
-            setStatus("Copied! Paste it in Discord: " .. DISCORD_URL, C.green)
-        else
-            setStatus("Couldn't copy or open automatically: " .. DISCORD_URL, C.yellow)
-        end
-    end)
-
-    local busy = false
-    local function showSuccess()
-        -- Shrink and fade all panel contents together, keeping the panel intact.
-        local content = {}
-        for _, child in ipairs(main:GetChildren()) do
-            if child:IsA("GuiObject") then
-                table.insert(content, child)
-            end
-        end
-
-        -- A UIScale on each root content object gives a smooth, unified exit.
-        local shrinkTweens = {}
-        for _, child in ipairs(content) do
-            local contentScale = Instance.new("UIScale")
-            contentScale.Name = "WORST_ExitScale"
-            contentScale.Scale = 1
-            contentScale.Parent = child
-            local t = TweenService:Create(contentScale,
-                TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.In),
-                {Scale = 0.15})
-            table.insert(shrinkTweens, t)
-            t:Play()
-        end
-
-        -- Fade the contents, but not the outer window.
-        local fadeTweens = {}
-        for _, child in ipairs(content) do
-            local props = {}
-            if child:IsA("TextLabel") or child:IsA("TextButton") or child:IsA("TextBox") then
-                props.TextTransparency = 1
-            end
-            if child.BackgroundTransparency < 1 then
-                props.BackgroundTransparency = 1
-            end
-            if next(props) then
-                local t = TweenService:Create(child,
-                    TweenInfo.new(0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.In), props)
-                table.insert(fadeTweens, t)
-                t:Play()
-            end
-            for _, descendant in ipairs(child:GetDescendants()) do
-                if descendant:IsA("UIStroke") then
-                    TweenService:Create(descendant,
-                        TweenInfo.new(0.28, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-                        {Transparency = 1}):Play()
-                end
-            end
-        end
-
-        task.wait(0.29)
-        if not gui.Parent then return end
-        for _, child in ipairs(content) do
-            child.Visible = false
-        end
-
-        local checkmark = Instance.new("TextLabel")
-        checkmark.Name = "SuccessCheckmark"
-        checkmark.BackgroundTransparency = 1
-        checkmark.AnchorPoint = Vector2.new(0.5, 0.5)
-        checkmark.Position = UDim2.fromScale(0.5, 0.5)
-        checkmark.Size = UDim2.fromOffset(180, 180)
-        checkmark.Font = Enum.Font.GothamBold
-        checkmark.Text = "✓"
-        checkmark.TextColor3 = C.green
-        checkmark.TextSize = 140
-        checkmark.TextTransparency = 1
-        checkmark.Parent = main
-
-        local checkScale = Instance.new("UIScale")
-        checkScale.Scale = 0.5
-        checkScale.Parent = checkmark
-        TweenService:Create(checkmark,
-            TweenInfo.new(0.24, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-            {TextTransparency = 0}):Play()
-        TweenService:Create(checkScale,
-            TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-            {Scale = 1}):Play()
-
-        task.wait(1)
-        if gui.Parent then
-            local fade = TweenService:Create(main,
-                TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In),
-                {GroupTransparency = 1})
-            fade:Play()
-            fade.Completed:Wait()
-            if gui.Parent then gui:Destroy() end
-        end
-    end
-
-    -- Wrong key effect: UI grows a little + turns red + vibrates, typed letters vanish one by one,
-    -- "Wrong Password" shows for 1 second, then everything goes back to normal.
-    local function wrongKeyEffect()
-        if not gui.Parent then return end
-        local RED = Color3.fromRGB(255, 60, 60)
-        local DARK_RED = Color3.fromRGB(45, 8, 8)
-        local baseScale = targetScale()
-        local basePos = main.Position
-        local strokeGrad = mainStroke:FindFirstChildOfClass("UIGradient")
-
-        local originalPlaceholder = input.PlaceholderText
-        input.PlaceholderText = ""   -- so it can't overlap the "Wrong Password" text
-        input.TextEditable = false
-        input.ClearTextOnFocus = false
-        input:ReleaseFocus()
-
-        -- turn red (the shimmer gradient would tint over the stroke colour, so pause it)
-        if strokeGrad then strokeGrad.Enabled = false end
-        mainStroke.Color = Color3.new(1, 1, 1)
-        TweenService:Create(mainStroke, TweenInfo.new(0.2), {Color = RED}):Play()
-        TweenService:Create(main, TweenInfo.new(0.2), {BackgroundColor3 = DARK_RED}):Play()
-
-        -- grow a little
-        TweenService:Create(scale, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
-            {Scale = baseScale * 1.06}):Play()
-
-        -- vibrate (horizontal shake that settles)
-        for i = 1, 10 do
-            if not gui.Parent then return end
-            local amp = 7 * (1 - (i - 1) / 10)
-            local dir = (i % 2 == 0) and 1 or -1
-            main.Position = UDim2.new(basePos.X.Scale, basePos.X.Offset + dir * amp,
-                basePos.Y.Scale, basePos.Y.Offset)
-            task.wait(0.035)
-        end
-        if not gui.Parent then return end
-        main.Position = basePos
-
-        -- every typed letter disappears, one by one
-        local typed = input.Text
-        local n = #typed
-        if n > 0 then
-            local delay = math.min(0.06, 0.6 / n)
-            for i = n - 1, 0, -1 do
-                if not gui.Parent then return end
-                input.Text = typed:sub(1, i)
-                task.wait(delay)
-            end
-        end
-
-        -- "Wrong Password" appears
-        local wrong = Instance.new("TextLabel")
-        wrong.Name = "WrongPassword"
-        wrong.ZIndex = 3
-        wrong.BackgroundTransparency = 1
-        wrong.Size = UDim2.fromScale(1, 1)
-        wrong.Font = Enum.Font.GothamBold
-        wrong.Text = "Wrong Password"
-        wrong.TextSize = 13
-        wrong.TextColor3 = RED
-        wrong.TextXAlignment = Enum.TextXAlignment.Center
-        wrong.Parent = input
-
-        task.wait(1)
-        if not gui.Parent then return end
-
-        -- back to the original
-        wrong:Destroy()
-        TweenService:Create(mainStroke, TweenInfo.new(0.25), {Color = Color3.new(1, 1, 1)}):Play()
-        TweenService:Create(main, TweenInfo.new(0.25), {BackgroundColor3 = C.bg}):Play()
-        local back = TweenService:Create(scale, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-            {Scale = baseScale})
-        back:Play()
-        back.Completed:Wait()
-        if not gui.Parent then return end
-        scale.Scale = targetScale()
-        if strokeGrad then strokeGrad.Enabled = true end
-        input.PlaceholderText = originalPlaceholder
-        input.TextEditable = true
-        setStatus("Enter a key to continue", C.muted)
-    end
-
-    local function submit()
-        if busy then return end
-        local key = input.Text:match("^%s*(.-)%s*$")
-        if key == "" then
-            setStatus("Please enter your license key.", C.red)
-            return
-        end
-        busy = true
-        verify.Text = "VERIFYING..."
-        setStatus("Checking key with WORST server...", C.muted)
-        task.spawn(function()
-            local ok, err = pcall(onKey, key)
-            if not gui.Parent then return end
-            if not ok then
-                setStatus("Verification error. Try again.", C.red)
-            elseif err then
-                setStatus(err, C.red)
-                wrongKeyEffect()
-                if not gui.Parent then return end
-            else
-                showSuccess()
-                return
-            end
-            busy = false
-            verify.Text = "VERIFY KEY"
-        end)
-    end
-    verify.MouseButton1Click:Connect(submit)
-    input.FocusLost:Connect(function(enter) if enter then submit() end end)
-
-    -- Drag via the header (mouse or touch).
-    local dragging, dragStart, initial, dragInput = false, nil, nil, nil
-    header.InputBegan:Connect(function(inputObject)
-        if inputObject.UserInputType == Enum.UserInputType.MouseButton1 or inputObject.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = inputObject.Position
-            initial = main.Position
-            dragInput = inputObject
-            inputObject.Changed:Connect(function()
-                if inputObject.UserInputState == Enum.UserInputState.End then dragging = false end
-            end)
-        end
-    end)
-    local dragConn = UIS.InputChanged:Connect(function(inputObject)
-        if not dragging then return end
-        if inputObject ~= dragInput and inputObject.UserInputType ~= Enum.UserInputType.MouseMovement then return end
-        local delta = inputObject.Position - dragStart
-        local factor = math.max(scale.Scale, 0.01)
-        main.Position = UDim2.new(initial.X.Scale, initial.X.Offset + delta.X / factor,
-            initial.Y.Scale, initial.Y.Offset + delta.Y / factor)
-    end)
-    gui.Destroying:Connect(function() dragConn:Disconnect() end)
-
-    -- Fade in, overshoot larger than the final window, then settle.
-    local goal = targetScale()
-    scale.Scale = goal * 0.68
-    main.GroupTransparency = 1
-    local pop = TweenService:Create(scale, TweenInfo.new(0.55, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-        Scale = goal
-    })
-    local fade = TweenService:Create(main, TweenInfo.new(0.26, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-        GroupTransparency = 0
-    })
-    pop:Play()
-    fade:Play()
-    pop.Completed:Connect(function()
-        animating = false
-        if gui.Parent then scale.Scale = targetScale() end
-    end)
-end
-
--- Response cache: accounts that server hop every few seconds would otherwise send one request per hop.
--- A saved answer younger than CACHE_TTL seconds is reused instead (one file per account, so every account is still logged by the server).
--- Set CACHE_TTL = 0 to turn it off. NOTE: the cache file holds the scripts the server sent, as plain text, inside the executor's workspace folder.
-local CACHE_TTL = 300
-local function cacheFile() return "WORST_cache_" .. tostring(LocalPlayer.UserId) .. ".json" end
-local function readCache(key)
-    if CACHE_TTL <= 0 or not (readfile and isfile) then return nil end
-    local ok, data = pcall(function()
-        if not isfile(cacheFile()) then return nil end
-        local c = HttpService:JSONDecode(readfile(cacheFile()))
-        if type(c) == "table" and c.key == key and type(c.t) == "number" and math.abs(os.time() - c.t) < CACHE_TTL
-            and type(c.data) == "table" then
-            return c.data
-        end
-    end)
-    return ok and data or nil
-end
-local function writeCache(key, data)
-    if CACHE_TTL <= 0 or not writefile then return end
-    pcall(function() writefile(cacheFile(), HttpService:JSONEncode({ key = key, t = os.time(), data = data })) end)
-end
-
-local first = (getgenv and getgenv().Key) or readSaved()
-
--- No key on this device: ask the Worker once with an empty key before showing any popup.
--- If the key system is OFF in the admin panel the Worker lets it through and the scripts run
--- with no popup at all. If it is ON the Worker answers 401 and the popup below shows as before.
-local function unavailable(status, err)
-    warn("[WORST AUTH] Server not reachable right now (" .. tostring(status or "no response") .. "): " .. tostring(err) .. ". Run the script again in a moment.")
-end
-
-if not first then
-    local open = readCache("")
-    if not open then
-        local err, status
-        open, err, status = checkRetry("")
-        if open then
-            writeCache("", open)
-        elseif not keyWanted(status) then
-            unavailable(status, err)   -- transient problem: do NOT show the key popup
-            return
-        end
-    end
-    if open then
-        runScripts(open)
-        listen("")
-        return
-    end
-end
-
-if first then
-    local data = readCache(tostring(first))   -- fresh saved answer: no request to the server
-    local err, status
-    if not data then
-        data, err, status = checkRetry(tostring(first))
-        if data then writeCache(tostring(first), data) end
-    end
-    if data then
-        writeSaved(tostring(first))
-        runScripts(data)
-        listen(tostring(first))
-        return
-    end
-    if not keyWanted(status) then
-        unavailable(status, err)   -- saved key may be fine; the server just didn't answer properly
-        return
-    end
-end
-
-popup(first and "Saved key invalid or expired. Join Discord." or nil, function(key)
-    local data, err = check(key)
-    if not data then return err end
-    writeCache(key, data)
-    writeSaved(key)
-    runScripts(data)
-    listen(key)
-    return nil
-end)
+/* ---------- Admin panel: VIP keys (admin only; the Worker rejects everyone else) ---------- */
+var vipKeys = null, newKey = "";
+function loadVip() { return api("/admin/vipkeys").then(function (d) { vipKeys = d._ok ? d.keys : []; if (!d._ok) say(d.error || "Could not load keys.", true); drawAdmin(); }); }
+var usage = null;
+function loadUsage() { return api("/admin/usage").then(function (d) { usage = d._ok ? d : { configured: true, error: d.error || "Could not load usage." }; drawAdmin(); }); }
+/* ---------- GitHub script watch: when the script file on GitHub last changed (admin only) ---------- */
+var watch = null;
+function loadWatch(fresh) { return api("/admin/scriptwatch" + (fresh ? "?fresh=1" : "")).then(function (d) { watch = d._ok ? d : { error: d.error || "Could not check GitHub." }; drawAdmin(); }); }
+function watchHtml() {
+  var h = '<section class="form"><h3 style="margin:0;font-size:17px">Script on GitHub <small style="color:var(--mute);font-weight:400">' + (watch && watch.repo ? esc(watch.repo + " · " + watch.branch) : "") + '</small></h3>';
+  if (!watch) return h + '<div class="empty">Loading…</div></section>';
+  if (watch.error) return h + '<div class="msg bad" style="margin:0">' + esc(watch.error) + '</div><div class="acts"><button class="btn ghost" data-a="ghrefresh">Check again</button></div></section>';
+  var c = watch.commit;
+  if (c && c.date) h += '<div>Last updated <b>' + esc(new Date(c.date).toLocaleString()) + '</b> <small style="display:inline;color:var(--mute)">(' + agoTxt(c.date) + ')</small></div>'
+    + '<div style="color:var(--mute)">' + esc(c.message || "No message") + (c.url ? ' · <a href="' + esc(c.url) + '" target="_blank" rel="noopener" style="color:var(--blue)">' + esc(c.sha) + '</a>' : "") + '</div>';
+  else h += '<div class="tnote" style="padding:0">GitHub’s commit info could not be read' + (watch.apiError ? " (" + esc(watch.apiError) + ")" : "") + ', so changes are detected from the file content instead.</div>';
+  h += '<small style="color:var(--mute)">' + (watch.changed ? "Change detected: the site first saw this version " : "The site first saw this version ") + agoTxt(watch.detected) + '.</small>';
+  return h + '<div class="acts"><button class="btn ghost" data-a="ghrefresh">Check now</button></div></section>';
+}
+/* ---------- Key system (loader key + on/off), admin only ---------- */
+var keysys = null;
+function loadKeySys() { return api("/admin/keysystem").then(function (d) { keysys = d._ok ? d : null; if (!d._ok) say(d.error || "Could not load the key system.", true); drawAdmin(); }); }
+function meter(label, n, max) {
+  var p = Math.min(100, n / max * 100), c = p >= 90 ? "var(--bad)" : p >= 70 ? "#e9b83d" : "var(--ok)";
+  return '<div class="mt"><div class="mh"><span>' + label + '</span><b>' + p.toFixed(p < 10 ? 1 : 0) + '%</b></div><div class="mb"><i style="width:' + p + '%;background:' + c + '"></i></div><small>' + n.toLocaleString() + ' / ' + max.toLocaleString() + '</small></div>';
+}
+function usageHtml() {
+  var h = '<section class="form"><h3 style="margin:0;font-size:17px">D1 usage today <small style="color:var(--mute);font-weight:400">(free plan, resets 00:00 UTC)</small></h3>';
+  if (usage === null) h += '<div class="empty">Loading…</div>';
+  else if (!usage.configured) h += '<div class="tnote" style="padding:0">Not set up yet. Add two Worker secrets, <b>CF_API_TOKEN</b> (an API token with Account Analytics: Read) and <b>CF_ACCOUNT_ID</b>, and the usage shows up here.</div>';
+  else if (usage.error) h += '<div class="msg bad" style="margin:0">' + esc(usage.error) + '</div>';
+  else {
+    h += meter("Rows read", usage.rowsRead, usage.readLimit) + meter("Rows written", usage.rowsWritten, usage.writeLimit);
+    if (usage.sizeBytes) h += meter("Database size", usage.sizeBytes, usage.sizeLimit);
+    h += '<small style="color:var(--mute)">Cloudflare’s numbers can lag by about a minute.</small>';
+  }
+  return h + '</section>';
+}
+function keysysHtml() {
+  var h = '<section class="form"><h3 style="margin:0;font-size:17px">Key system</h3>';
+  if (!keysys) return h + '<div class="empty">Loading…</div></section>';
+  h += '<div class="acts" style="align-items:center;justify-content:space-between"><span>Required to run the loader</span><div class="acts" style="gap:8px;align-items:center"><span class="state' + (keysys.on ? " on" : "") + '">' + (keysys.on ? "On" : "Off") + '</span><button type="button" class="sw" role="switch" aria-checked="' + (keysys.on ? "true" : "false") + '" aria-label="Key system required" data-a="keytoggle"></button></div></div>';
+  h += '<div><div style="color:var(--mute);font-size:13px;margin:4px 0">Current key</div><input id="keyCur" readonly value="' + esc(keysys.key || "") + '"></div>';
+  h += '<div class="acts"><button class="btn ghost" data-a="keycopy">Copy</button></div>';
+  h += '<div><div style="color:var(--mute);font-size:13px;margin:12px 0 4px">Set a new key</div><input id="keyNew" maxlength="64" placeholder="New loader key" autocomplete="off"></div>';
+  h += '<div class="acts"><button class="btn" data-a="keysave">Save new key</button></div>';
+  return h + '</section>';
+}
+function drawAdmin() {
+  if (page !== "admin") return;
+  var h = head("Admin", "Create and delete VIP keys. A VIP sees script names and descriptions only, never the code or any buttons.") + watchHtml() + keysysHtml() + usageHtml()
+    + '<div class="form"><input id="vipLabel" maxlength="40" placeholder="Who is this key for? (a name, so you can tell keys apart)" autocomplete="off">'
+    + '<input id="vipCustom" maxlength="64" placeholder="Custom key (optional, leave empty to generate one)" autocomplete="off">'
+    + '<div class="acts"><button class="btn" data-a="vipcreate">Create VIP key</button></div></div>';
+  if (newKey) h += '<div class="form"><div>New key. It is shown only once, so copy it now:</div><input id="vipNew" readonly value="' + esc(newKey) + '"><div class="acts"><button class="btn" data-a="vipcopy">Copy</button></div></div>';
+  if (vipKeys === null) h += '<div class="empty">Loading…</div>';
+  else if (!vipKeys.length) h += '<div class="empty">No VIP keys yet.</div>';
+  else h += '<div class="rows">' + vipKeys.map(function (k) {
+    return '<div class="item"><div><div class="name">' + esc(k.label || "Unnamed") + '</div><small>Key ends in ' + esc(k.hint) + ' · created ' + new Date(k.created).toLocaleDateString() + '</small></div><div class="acts right"><button class="btn ghost del" data-a="vipdel" data-id="' + esc(k.id) + '">Delete</button></div></div>';
+  }).join("") + '</div>';
+  $("main").innerHTML = h + '<div class="msg' + (bad ? " bad" : "") + '" id="msg">' + esc(msg) + '</div>';
+}
+function vipAction(a, b) {
+  if (a === "vipcreate") {
+    b.disabled = true;
+    api("/admin/vipkeys/create", { label: $("vipLabel").value, key: $("vipCustom").value }).then(function (d) {
+      if (!d._ok) { b.disabled = false; say(d.error || "Could not create the key.", true); return; }
+      newKey = d.key; msg = "Created."; bad = false; return loadVip();
+    });
+  } else if (a === "vipcopy") {
+    var i = $("vipNew"); i.select();
+    if (navigator.clipboard) navigator.clipboard.writeText(newKey).then(function () { say("Copied.", false); }, function () { document.execCommand("copy"); say("Copied.", false); });
+    else { document.execCommand("copy"); say("Copied.", false); }
+  } else if (a === "vipdel" && confirm("Delete this VIP key? Anyone using it is locked out.")) {
+    api("/admin/vipkeys/delete", { id: b.dataset.id }).then(function (d) { msg = d._ok ? "Deleted." : (d.error || "Could not delete."); bad = !d._ok; return loadVip(); });
+  }
+}
+function keyAction(a, b) {
+  if (a === "keytoggle") {
+    api("/admin/keysystem", { on: !keysys.on }).then(function (d) {
+      if (!d._ok) { say(d.error || "Could not update.", true); return; }
+      say(keysys.on ? "Key system turned off. The loader will not ask for a key." : "Key system turned on.", false);
+      return loadKeySys();
+    });
+  } else if (a === "keysave") {
+    var v = ($("keyNew").value || "").trim();
+    if (!v) { say("Enter a new key first.", true); return; }
+    b.disabled = true;
+    api("/admin/keysystem", { key: v }).then(function (d) {
+      b.disabled = false;
+      if (!d._ok) { say(d.error || "Could not save.", true); return; }
+      say("Key updated. It takes effect immediately.", false); return loadKeySys();
+    });
+  } else if (a === "keycopy") {
+    var i = $("keyCur"); i.select();
+    if (navigator.clipboard) navigator.clipboard.writeText(i.value).then(function () { say("Copied.", false); }, function () { document.execCommand("copy"); say("Copied.", false); });
+    else { document.execCommand("copy"); say("Copied.", false); }
+  }
+}
+function go(p) {
+  page = p; edit = null; msg = ""; newKey = ""; clearInterval(timer); stopHoppers(); $("main").className = "";
+  document.querySelectorAll(".nav").forEach(function (x) { x.classList.toggle("on", x.dataset.p === p); });
+  location.hash = p;
+  if (p === "executes") { $("main").innerHTML = head("Executes", "Loading…"); loadExecutes(); timer = setInterval(loadExecutes, 15000); }
+  else if (p === "hoppers") { $("main").innerHTML = ""; hp = null; ck = null; fr = null; ckOpen = false; ckFormShown = false; drawHoppers(); hopTick(); timer = setInterval(hopTick, HOPPER_POLL_MS); }
+  else if (p === "admin") { drawAdmin(); loadVip(); loadUsage(); loadKeySys(); loadWatch(false); }
+  else { drawList(); reload(); }
+}
+var role = null;   // admin / vip / guest, decided by the Worker from the password
+api("/admin/whoami").then(function (d) {
+  role = d.role || "guest";
+  if (role === "admin") sessionStorage.setItem("pw", PW); else sessionStorage.removeItem("pw");
+  var an = document.querySelector('.nav[data-p="admin"]'); if (an && role === "admin") an.style.display = "";
+  var hn = document.querySelector('.nav[data-p="hoppers"]'); if (hn && role === "admin") hn.style.display = "";
+  document.querySelectorAll(".nav").forEach(function (x) { if (role === "guest" && x.dataset.p !== "executes") x.style.display = "none"; });
+  var h = location.hash, more = role !== "guest";
+  go(role === "admin" && h === "#admin" ? "admin" : role === "admin" && h === "#hoppers" ? "hoppers" : more && h === "#auto" ? "auto" : more && h === "#scripts" ? "scripts" : "executes");
+});
+</script>
+<script>
+// Background (same as worst.html): still image first, the video fades in over it. Video is PC only and skipped for reduced motion.
+(function () {
+  var bg = document.getElementById("bg"), v = bg.querySelector("video");
+  bg.style.backgroundImage = 'url("https://cdn.jsdelivr.net/gh/WORSTAsaiya/ASAIYASITE@main/WWORST.png")';
+  var pc = window.matchMedia && matchMedia("(hover:hover) and (pointer:fine) and (min-width:761px)").matches;
+  var calm = window.matchMedia && matchMedia("(prefers-reduced-motion:reduce)").matches;
+  if (!pc || calm) { v.removeAttribute("autoplay"); return; }
+  v.muted = true;
+  v.addEventListener("playing", function () { v.classList.add("on"); });
+  v.src = "https://cdn.jsdelivr.net/gh/WORSTAsaiya/ASAIYASITE@main/calc-pc.mp4";
+  var p = v.play(); if (p && p.catch) p.catch(function () {});
+})();
+</script>
+</body>
+</html>
