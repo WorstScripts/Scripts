@@ -170,7 +170,7 @@ var WORKER = "https://script-hub.worstasaiya.workers.dev";
 var HOPPERS = "https://come-feelings-incurred-degrees.trycloudflare.com";
 // How often the SAE HOPPERS page asks the relay for the list (milliseconds). Each ask is tiny and the relay
 // keeps everything in memory, so 5000 is cheap. Only the newest request is ever in flight.
-var HOPPER_POLL_MS = 3000;
+var HOPPER_POLL_MS = 5000;
 // Anyone who enters the wrong admin password is sent here.
 var DENIED_URL = "https://discord.gg/w0rst";
 
@@ -215,7 +215,7 @@ function loadHoppers() {
     .then(function (d) { if (hpCtl !== ctl) return; hpCtl = null; hp = d; drawHoppers(); })
     .catch(function (e) { if ((e && e.name === "AbortError") || hpCtl !== ctl) return; hpCtl = null; hp = { error: true }; drawHoppers(); });
 }
-function hopTick() { loadHoppers(); loadClients(); }
+function hopTick() { loadHoppers(); loadClients(); loadFree(); }
 document.addEventListener("visibilitychange", function () { if (!document.hidden && page === "hoppers") hopTick(); });
 
 // Admin calls to the relay (client keys). Always resolves: { _ok, ...json } or { _ok:false, error }.
@@ -249,7 +249,12 @@ function hpShell() {
   if ($("hpTop")) return;
   $("main").className = "";
   $("main").innerHTML = head("SAE HOPPERS", "Live status of every SAE hopper account, and the client keys that decide who gets their alerts.")
-    + '<div id="hpTop"></div><div id="ckBox"></div>';
+    + '<div id="hpTop"></div>'
+    + '<section class="form" id="frBox" style="margin-top:36px">'
+    + '<div class="bar" style="justify-content:space-between;align-items:center;margin:0"><h3 style="margin:0;font-size:20px">Free version</h3><span class="state on" id="frVal">…</span></div>'
+    + '<input id="frSlider" type="range" min="0" max="300" step="1" value="0" disabled style="padding:0;border:0;background:none;accent-color:var(--blue);cursor:pointer">'
+    + '<small id="frInfo" style="color:var(--mute)">Loading…</small></section>'
+    + '<div id="ckBox"></div>';
   drawClients();
 }
 function drawHoppers() {
@@ -346,6 +351,60 @@ function ckAction(a, b) {
     relay("/admin/clients/delete", { key: id }).then(function (d) { ckSay(d._ok && d.ok ? "Deleted." : (d.error || "Could not delete."), !(d._ok && d.ok)); ckBusy = false; loadClients(); });
   }
 }
+
+/* ---------- Free version slider: the MOST an egg can be worth for people who are NOT logged in (and they get it 2s late) ----------
+   Far left = off, far right = no limit, in between $1K/s .. $1Qa/s on the same log scale as the joiner's value slider. */
+var fr = null, frBusy = false, frSaving = false, FR_STEPS = 300;
+function frToValue(s) {
+  s = Number(s); if (s <= 0) return 0; if (s >= FR_STEPS) return 1e18;
+  return Number(Math.pow(10, 3 + (s - 1) / (FR_STEPS - 2) * 12).toPrecision(3));
+}
+function frToStep(v) {
+  v = Number(v); if (!(v > 0)) return 0; if (v >= 1e18) return FR_STEPS;
+  return Math.max(1, Math.min(FR_STEPS - 1, Math.round(1 + (Math.log10(v) - 3) / 12 * (FR_STEPS - 2))));
+}
+function frFmt(v) {
+  if (!(v > 0)) return "Off"; if (v >= 1e18) return "No limit";
+  var U = [[1e15, "Qa"], [1e12, "T"], [1e9, "B"], [1e6, "M"], [1e3, "K"]];
+  for (var i = 0; i < U.length; i++) if (v >= U[i][0]) return "$" + Number((v / U[i][0]).toPrecision(3)) + U[i][1] + "/s";
+  return "$" + v + "/s";
+}
+function frText() {
+  var s = $("frSlider"), v = $("frVal"); if (!s || !v) return;
+  v.textContent = frFmt(frToValue(s.value));
+}
+function drawFree() {
+  var s = $("frSlider"), i = $("frInfo"); if (!s || !i) return;
+  if (fr === null) { i.textContent = "Loading…"; return; }
+  if (fr.error) { s.disabled = true; i.style.color = "var(--bad)"; i.textContent = fr.error; return; }
+  s.disabled = false;
+  if (document.activeElement !== s && !frSaving) { s.value = frToStep(fr.max); $("frVal").textContent = frFmt(fr.max); }   // show the exact saved value
+  else frText();
+  i.style.color = "var(--mute)";
+  var who = fr.online + " free user" + (fr.online === 1 ? "" : "s") + " connected.";
+  i.textContent = !(fr.max > 0) ? "Off. Anyone without a key sees nothing."
+    : fr.max >= 1e18 ? "People without a key see every egg, " + (fr.delayMs / 1000) + "s after paying clients. " + who
+    : "People without a key only see eggs worth up to " + frFmt(fr.max) + ", " + (fr.delayMs / 1000) + "s after paying clients. Anything worth more is hidden from them. " + who;
+}
+function loadFree() {
+  if (role !== "admin" || document.hidden || frBusy || frSaving || page !== "hoppers") return;
+  frBusy = true;
+  relay("/admin/free").then(function (d) {
+    frBusy = false;
+    fr = d._ok && d.ok ? d : { error: d.error || "Could not load the free version setting. Is the relay updated?" };
+    drawFree();
+  });
+}
+document.addEventListener("input", function (e) { if (e.target && e.target.id === "frSlider") frText(); });
+document.addEventListener("change", function (e) {
+  if (!e.target || e.target.id !== "frSlider") return;
+  frSaving = true;
+  relay("/admin/free", { max: frToValue(e.target.value) }).then(function (d) {
+    frSaving = false;
+    if (!(d._ok && d.ok)) { var i = $("frInfo"); if (i) { i.style.color = "var(--bad)"; i.textContent = d.error || "Could not save."; } return; }
+    loadFree();
+  });
+});
 
 /* ---------- Executes ---------- */
 function list(title, rows, fmt) {
@@ -554,7 +613,7 @@ function go(p) {
   document.querySelectorAll(".nav").forEach(function (x) { x.classList.toggle("on", x.dataset.p === p); });
   location.hash = p;
   if (p === "executes") { $("main").innerHTML = head("Executes", "Loading…"); loadExecutes(); timer = setInterval(loadExecutes, 15000); }
-  else if (p === "hoppers") { $("main").innerHTML = ""; hp = null; ck = null; ckOpen = false; ckFormShown = false; drawHoppers(); hopTick(); timer = setInterval(hopTick, HOPPER_POLL_MS); }
+  else if (p === "hoppers") { $("main").innerHTML = ""; hp = null; ck = null; fr = null; ckOpen = false; ckFormShown = false; drawHoppers(); hopTick(); timer = setInterval(hopTick, HOPPER_POLL_MS); }
   else if (p === "admin") { drawAdmin(); loadVip(); loadUsage(); loadKeySys(); loadWatch(false); }
   else { drawList(); reload(); }
 }
