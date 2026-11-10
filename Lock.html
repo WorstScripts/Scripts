@@ -277,7 +277,7 @@ function drawHoppers() {
 }
 
 /* ---------- Client keys (admin only): who may use the joiner, for how long, on how many bots ---------- */
-var ck = null, ckOpen = false, ckBusy = false;
+var ck = null, ckOpen = false, ckBusy = false, ckEditing = null, ckOrig = null;
 function ckSay(t, b) { var m = $("ckMsg"); if (m) { m.textContent = t; m.className = "msg" + (b ? " bad" : ""); } }
 function loadClients() {
   if (role !== "admin" || document.hidden || ckBusy || page !== "hoppers") return;
@@ -288,17 +288,32 @@ function loadClients() {
     drawClients();
   });
 }
+function ckTimeLeftS(c) { return c.status === "unused" ? c.durationMs / 1000 : c.status === "expired" ? 0 : c.secondsLeft; }
 function ckItem(c) {
   var id = ' data-id="' + esc(c.key) + '"';
-  var st = c.status === "unused" ? "Not used yet · lasts " + fmtSpan(c.durationMs / 1000)
-    : c.status === "expired" ? "Expired" : fmtSpan(c.secondsLeft) + " left";
-  return '<div class="item"><div><div class="name">' + esc(c.label || "Unnamed") + '</div>'
+  if (ckEditing === c.key) {
+    var sec = ckTimeLeftS(c), inDays = sec >= 86400, val = sec > 0 ? Number((inDays ? sec / 86400 : sec / 3600).toFixed(2)) : 1;
+    ckOrig = { val: String(val), unit: inDays ? "24" : "1" };
+    return '<div class="item"><div style="grid-column:1/-1"><small>Name</small><input class="ckeLabel" maxlength="40" value="' + esc(c.label) + '" autocomplete="off">'
+      + '<small>Key</small><input class="ckeKey" maxlength="64" value="' + esc(c.key) + '" autocomplete="off">'
+      + '<div class="ckgrid"><div><small>Max bots</small><input class="ckeBots" type="number" min="1" max="500" value="' + c.bots + '"></div>'
+      + '<div><small>' + (c.status === "unused" ? "Lasts" : "Time left") + '</small><input class="ckeDur" type="number" min="0" step="any" value="' + val + '"></div>'
+      + '<div><small>Unit</small><select class="ckeUnit"><option value="24"' + (inDays ? " selected" : "") + '>days</option><option value="1"' + (inDays ? "" : " selected") + '>hours</option></select></div></div>'
+      + '<small>Changing the key logs the client out; they must enter the new one.</small></div>'
+      + '<div class="acts more"><button class="btn" data-a="ckeditsave"' + id + '>Save</button><button class="btn ghost" data-a="ckeditcancel">Cancel</button></div></div>';
+  }
+  var st = c.status === "unused" ? (c.paused ? "Paused · " : "") + "Not used yet · lasts " + fmtSpan(c.durationMs / 1000)
+    : c.status === "expired" ? "Expired" : c.paused ? "Time paused · " + fmtSpan(c.secondsLeft) + " left" : fmtSpan(c.secondsLeft) + " left";
+  var dot = '<span title="' + (c.connected ? "In use right now" : "Not in use") + '" style="display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;vertical-align:middle;'
+    + 'background:' + (c.connected ? "var(--ok)" : "var(--bad)") + ';box-shadow:0 0 8px ' + (c.connected ? "var(--ok)" : "var(--bad)") + '"></span>';
+  return '<div class="item"><div><div class="name">' + dot + esc(c.label || "Unnamed") + '</div>'
     + '<small class="mono">' + esc(c.key) + '</small>'
-    + '<small><span class="state' + (c.status === "active" ? " on" : "") + '">' + st + '</span>' + (c.connected ? ' · <span class="state on">online now</span>' : "") + '</small>'
+    + '<small><span class="state' + (c.status === "active" && !c.paused ? " on" : "") + '">' + st + '</span>' + (c.connected ? ' · <span class="state on">online now</span>' : "") + '</small>'
     + '<small>Bots ' + c.assigned.length + '/' + c.bots + (c.assigned.length ? ' · ' + esc(c.assigned.join(", ")) : "") + '</small></div>'
     + '<div class="acts more"><button class="btn ghost" data-a="ckcopy"' + id + '>Copy key</button>'
     + '<button class="btn ghost" data-a="ckbots"' + id + ' data-n="' + c.bots + '">Set bots</button>'
-    + '<button class="btn ghost" data-a="ckadd"' + id + '>Add time</button>'
+    + '<button class="btn ghost" data-a="ckedit"' + id + '>Edit</button>'
+    + (c.status === "expired" ? "" : '<button class="btn ghost" data-a="ckpause"' + id + ' data-p="' + (c.paused ? "1" : "0") + '">' + (c.paused ? "Resume time" : "Pause time") + '</button>')
     + '<button class="btn ghost del" data-a="ckdel"' + id + '>Delete</button></div></div>';
 }
 function drawClients() {
@@ -310,6 +325,7 @@ function drawClients() {
   if (ck === null) { l.innerHTML = '<div class="empty">Loading…</div>'; return; }
   if (ck.error) { l.innerHTML = '<div class="msg bad">' + esc(ck.error) + '</div>'; $("ckPool").textContent = ""; return; }
   $("ckPool").textContent = ck.pool.online + " bots online · " + ck.pool.assigned + " in use by clients · " + ck.pool.free + " not used by anyone";
+  if (ckEditing !== null && l.querySelector(".ckeKey")) return;   // keep the open edit form untouched
   l.innerHTML = ck.clients.length ? '<div class="rows">' + ck.clients.map(ckItem).join("") + '</div>' : '<div class="empty">No client keys yet. Press Create Key.</div>';
 }
 // the form is drawn only when opened / closed (never by polling), so typing is never lost
@@ -346,9 +362,21 @@ function ckAction(a, b) {
     var v = prompt("Maximum bots this client can get alerts from?", b.dataset.n); if (v === null) return;
     relay("/admin/clients/update", { key: id, bots: Number(v) }).then(function (d) { ckSay(d._ok && d.ok ? "Updated." : (d.error || "Could not update."), !(d._ok && d.ok)); ckBusy = false; loadClients(); });
   }
-  else if (a === "ckadd") {
-    var h = prompt("Add how many hours? 24 = one day. Use a negative number to remove time.", "24"); if (h === null) return;
-    relay("/admin/clients/update", { key: id, addHours: Number(h) }).then(function (d) { ckSay(d._ok && d.ok ? "Time updated." : (d.error || "Could not update."), !(d._ok && d.ok)); ckBusy = false; loadClients(); });
+  else if (a === "ckedit") { ckEditing = id; drawClients(); }
+  else if (a === "ckeditcancel") { ckEditing = null; drawClients(); }
+  else if (a === "ckeditsave") {
+    var it = b.closest(".item"), q = function (c) { return it.querySelector(c); };
+    var body = { key: id, label: q(".ckeLabel").value, newKey: q(".ckeKey").value.trim(), bots: Number(q(".ckeBots").value) };
+    if (q(".ckeDur").value !== ckOrig.val || q(".ckeUnit").value !== ckOrig.unit) body.setHours = Number(q(".ckeDur").value) * Number(q(".ckeUnit").value);
+    b.disabled = true;
+    relay("/admin/clients/update", body).then(function (d) {
+      b.disabled = false;
+      if (!d._ok || !d.ok) { ckSay(d.error || "Could not save.", true); return; }
+      ckEditing = null; ckSay("Saved.", false); ckBusy = false; loadClients();
+    });
+  }
+  else if (a === "ckpause") {
+    relay("/admin/clients/update", { key: id, paused: b.dataset.p !== "1" }).then(function (d) { ckSay(d._ok && d.ok ? (b.dataset.p === "1" ? "Time resumed." : "Time paused.") : (d.error || "Could not update."), !(d._ok && d.ok)); ckBusy = false; loadClients(); });
   }
   else if (a === "ckdel" && confirm("Delete this key? The client is logged out right away.")) {
     relay("/admin/clients/delete", { key: id }).then(function (d) { ckSay(d._ok && d.ok ? "Deleted." : (d.error || "Could not delete."), !(d._ok && d.ok)); ckBusy = false; loadClients(); });
