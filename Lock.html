@@ -126,6 +126,12 @@ h2{text-shadow:0 0 10px #4cc3ff,0 0 26px #2d9be0,0 0 50px rgba(45,155,224,.7)}
 .form select{background:rgba(0,0,0,.38);border:1px solid var(--edge);border-radius:8px;padding:10px 12px;width:100%;font:inherit;color:var(--text)}
 .form select option{background:#0e1522;color:#e6ebf5}
 .form small{color:var(--mute)}
+.ckedit{display:grid;gap:10px}
+.item .btn.paused,.item .btn.paused:hover{color:var(--bad);border-color:var(--bad);background:rgba(255,123,123,.12)}
+.ckedit input,.ckedit select{background:rgba(0,0,0,.38);border:1px solid var(--edge);border-radius:8px;padding:10px 12px;width:100%;font:inherit;color:var(--text)}
+.ckedit input:focus,.ckedit select:focus{border-color:var(--blue);outline:0;box-shadow:0 0 0 3px rgba(61,155,233,.2)}
+.ckedit select option{background:#0e1522;color:#e6ebf5}
+.ckedit small{color:var(--mute)}
 .ckgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
 @media(max-width:600px){.ckgrid{grid-template-columns:1fr}}
 .mono{font-family:var(--mono)}
@@ -249,7 +255,6 @@ function hpShell() {
   if ($("hpTop")) return;
   $("main").className = "";
   $("main").innerHTML = head("SAE HOPPERS", "Live status of every SAE hopper account, and the client keys that decide who gets their alerts.")
-    + '<div id="hpTop"></div>'
     + '<section class="form" id="frBox" style="margin-top:36px">'
     + '<div class="bar" style="justify-content:space-between;align-items:center;margin:0"><h3 style="margin:0;font-size:20px">Free version</h3></div>'
     + '<div class="bar" style="justify-content:space-between;align-items:center;margin:14px 0 0"><span>Delay behind paying clients</span><span class="state on" id="frDelayVal">…</span></div>'
@@ -257,7 +262,8 @@ function hpShell() {
     + '<div class="bar" style="justify-content:space-between;align-items:center;margin:14px 0 0"><span>Max egg value</span><span class="state on" id="frVal">…</span></div>'
     + '<input id="frSlider" type="range" min="0" max="300" step="1" value="0" disabled style="padding:0;border:0;background:none;accent-color:var(--blue);cursor:pointer">'
     + '<small id="frInfo" style="color:var(--mute)">Loading…</small></section>'
-    + '<div id="ckBox"></div>';
+    + '<div id="ckBox"></div>'
+    + '<div id="hpTop" style="margin-top:44px"></div>';
   drawClients();
 }
 function drawHoppers() {
@@ -292,13 +298,13 @@ function ckTimeLeftS(c) { return c.status === "unused" ? c.durationMs / 1000 : c
 function ckItem(c) {
   var id = ' data-id="' + esc(c.key) + '"';
   if (ckEditing === c.key) {
-    var sec = ckTimeLeftS(c), inDays = sec >= 86400, val = sec > 0 ? Number((inDays ? sec / 86400 : sec / 3600).toFixed(2)) : 1;
-    ckOrig = { val: String(val), unit: inDays ? "24" : "1" };
-    return '<div class="item"><div style="grid-column:1/-1"><small>Name</small><input class="ckeLabel" maxlength="40" value="' + esc(c.label) + '" autocomplete="off">'
+    var sec = ckTimeLeftS(c), dd = sec > 0 ? Math.floor(sec / 86400) : 1, hh = sec > 0 ? Math.floor(sec % 86400 / 3600) : 0;
+    ckOrig = { d: String(dd), h: String(hh) };
+    return '<div class="item"><div class="ckedit" style="grid-column:1/-1"><small>Name</small><input class="ckeLabel" maxlength="40" value="' + esc(c.label) + '" autocomplete="off">'
       + '<small>Key</small><input class="ckeKey" maxlength="64" value="' + esc(c.key) + '" autocomplete="off">'
       + '<div class="ckgrid"><div><small>Max bots</small><input class="ckeBots" type="number" min="1" max="500" value="' + c.bots + '"></div>'
-      + '<div><small>' + (c.status === "unused" ? "Lasts" : "Time left") + '</small><input class="ckeDur" type="number" min="0" step="any" value="' + val + '"></div>'
-      + '<div><small>Unit</small><select class="ckeUnit"><option value="24"' + (inDays ? " selected" : "") + '>days</option><option value="1"' + (inDays ? "" : " selected") + '>hours</option></select></div></div>'
+      + '<div><small>' + (c.status === "unused" ? "Lasts: days" : "Time left: days") + '</small><input class="ckeDays" type="number" min="0" step="any" value="' + dd + '"></div>'
+      + '<div><small>and hours</small><input class="ckeHrs" type="number" min="0" step="any" value="' + hh + '"></div></div>'
       + '<small>Changing the key logs the client out; they must enter the new one.</small></div>'
       + '<div class="acts more"><button class="btn" data-a="ckeditsave"' + id + '>Save</button><button class="btn ghost" data-a="ckeditcancel">Cancel</button></div></div>';
   }
@@ -313,7 +319,7 @@ function ckItem(c) {
     + '<div class="acts more"><button class="btn ghost" data-a="ckcopy"' + id + '>Copy key</button>'
     + '<button class="btn ghost" data-a="ckbots"' + id + ' data-n="' + c.bots + '">Set bots</button>'
     + '<button class="btn ghost" data-a="ckedit"' + id + '>Edit</button>'
-    + (c.status === "expired" ? "" : '<button class="btn ghost" data-a="ckpause"' + id + ' data-p="' + (c.paused ? "1" : "0") + '">' + (c.paused ? "Resume time" : "Pause time") + '</button>')
+    + (c.status === "expired" ? "" : '<button class="btn ghost' + (c.paused ? " paused" : "") + '" data-a="ckpause"' + id + ' data-p="' + (c.paused ? "1" : "0") + '"' + (c.paused ? ' title="Click to resume the time"' : "") + '>' + (c.paused ? "Time Paused" : "Pause time") + '</button>')
     + '<button class="btn ghost del" data-a="ckdel"' + id + '>Delete</button></div></div>';
 }
 function drawClients() {
@@ -337,8 +343,8 @@ function drawCkForm() {
     + '<input id="ckLabel" maxlength="40" placeholder="Client name (so you can tell them apart)" autocomplete="off">'
     + '<input id="ckCustom" maxlength="64" placeholder="Custom key (optional, leave empty to generate one)" autocomplete="off">'
     + '<div class="ckgrid"><div><small>Max bots for this client</small><input id="ckBots" type="number" min="1" max="500" value="3"></div>'
-    + '<div><small>Lasts</small><input id="ckDur" type="number" min="1" value="7"></div>'
-    + '<div><small>Unit</small><select id="ckUnit"><option value="24">days</option><option value="1">hours</option></select></div></div>'
+    + '<div><small>Lasts: days</small><input id="ckDays" type="number" min="0" step="any" value="7"></div>'
+    + '<div><small>and hours</small><input id="ckHrs" type="number" min="0" step="any" value="0"></div></div>'
     + '<small>The timer starts when the client first logs in, not when you create the key.</small>'
     + '<div class="acts"><button class="btn" data-a="cksave">Create key</button><button class="btn ghost" data-a="ckcancel">Cancel</button></div></div>';
 }
@@ -348,7 +354,7 @@ function ckAction(a, b) {
   else if (a === "ckcancel") { ckOpen = false; drawCkForm(); }
   else if (a === "cksave") {
     b.disabled = true;
-    relay("/admin/clients/create", { label: $("ckLabel").value, key: $("ckCustom").value, bots: Number($("ckBots").value), hours: Number($("ckDur").value) * Number($("ckUnit").value) }).then(function (d) {
+    relay("/admin/clients/create", { label: $("ckLabel").value, key: $("ckCustom").value, bots: Number($("ckBots").value), hours: (Number($("ckDays").value) || 0) * 24 + (Number($("ckHrs").value) || 0) }).then(function (d) {
       b.disabled = false;
       if (!d._ok || !d.ok) { ckSay(d.error || "Could not create the key.", true); return; }
       ckOpen = false; drawCkForm(); ckSay("Created. The key is " + d.key + " (also in the list below).", false); ckBusy = false; loadClients();
@@ -367,16 +373,17 @@ function ckAction(a, b) {
   else if (a === "ckeditsave") {
     var it = b.closest(".item"), q = function (c) { return it.querySelector(c); };
     var body = { key: id, label: q(".ckeLabel").value, newKey: q(".ckeKey").value.trim(), bots: Number(q(".ckeBots").value) };
-    if (q(".ckeDur").value !== ckOrig.val || q(".ckeUnit").value !== ckOrig.unit) body.setHours = Number(q(".ckeDur").value) * Number(q(".ckeUnit").value);
+    if (q(".ckeDays").value !== ckOrig.d || q(".ckeHrs").value !== ckOrig.h) body.setHours = (Number(q(".ckeDays").value) || 0) * 24 + (Number(q(".ckeHrs").value) || 0);
     b.disabled = true;
     relay("/admin/clients/update", body).then(function (d) {
       b.disabled = false;
       if (!d._ok || !d.ok) { ckSay(d.error || "Could not save.", true); return; }
+      if (d.key === undefined) { ckEditing = null; ckSay("The relay is still the old version, so only the bot count was saved. Upload the new Relay.js to your server and restart it.", true); ckBusy = false; loadClients(); return; }
       ckEditing = null; ckSay("Saved.", false); ckBusy = false; loadClients();
     });
   }
   else if (a === "ckpause") {
-    relay("/admin/clients/update", { key: id, paused: b.dataset.p !== "1" }).then(function (d) { ckSay(d._ok && d.ok ? (b.dataset.p === "1" ? "Time resumed." : "Time paused.") : (d.error || "Could not update."), !(d._ok && d.ok)); ckBusy = false; loadClients(); });
+    relay("/admin/clients/update", { key: id, paused: b.dataset.p !== "1" }).then(function (d) { if (d._ok && d.ok && d.key === undefined) { ckSay("The relay is still the old version, so nothing changed. Upload the new Relay.js to your server and restart it.", true); ckBusy = false; loadClients(); return; } ckSay(d._ok && d.ok ? (b.dataset.p === "1" ? "Time resumed." : "Time paused.") : (d.error || "Could not update."), !(d._ok && d.ok)); ckBusy = false; loadClients(); });
   }
   else if (a === "ckdel" && confirm("Delete this key? The client is logged out right away.")) {
     relay("/admin/clients/delete", { key: id }).then(function (d) { ckSay(d._ok && d.ok ? "Deleted." : (d.error || "Could not delete."), !(d._ok && d.ok)); ckBusy = false; loadClients(); });
