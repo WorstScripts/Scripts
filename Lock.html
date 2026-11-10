@@ -251,7 +251,10 @@ function hpShell() {
   $("main").innerHTML = head("SAE HOPPERS", "Live status of every SAE hopper account, and the client keys that decide who gets their alerts.")
     + '<div id="hpTop"></div>'
     + '<section class="form" id="frBox" style="margin-top:36px">'
-    + '<div class="bar" style="justify-content:space-between;align-items:center;margin:0"><h3 style="margin:0;font-size:20px">Free version</h3><span class="state on" id="frVal">…</span></div>'
+    + '<div class="bar" style="justify-content:space-between;align-items:center;margin:0"><h3 style="margin:0;font-size:20px">Free version</h3></div>'
+    + '<div class="bar" style="justify-content:space-between;align-items:center;margin:14px 0 0"><span>Delay behind paying clients</span><span class="state on" id="frDelayVal">…</span></div>'
+    + '<input id="frDelay" type="range" min="0" max="120" step="1" value="4" disabled style="padding:0;border:0;background:none;accent-color:var(--blue);cursor:pointer">'
+    + '<div class="bar" style="justify-content:space-between;align-items:center;margin:14px 0 0"><span>Max egg value</span><span class="state on" id="frVal">…</span></div>'
     + '<input id="frSlider" type="range" min="0" max="300" step="1" value="0" disabled style="padding:0;border:0;background:none;accent-color:var(--blue);cursor:pointer">'
     + '<small id="frInfo" style="color:var(--mute)">Loading…</small></section>'
     + '<div id="ckBox"></div>';
@@ -369,6 +372,12 @@ function frFmt(v) {
   for (var i = 0; i < U.length; i++) if (v >= U[i][0]) return "$" + Number((v / U[i][0]).toPrecision(3)) + U[i][1] + "/s";
   return "$" + v + "/s";
 }
+var FR_DELAY_UNIT = 500;   // each step of the delay slider = 0.5s, so 0..120 steps = 0..60s (the relay's limit)
+function frDelayFmt(ms) { return ms > 0 ? Number((ms / 1000).toFixed(1)) + "s" : "No delay"; }
+function frDelayText() {
+  var d = $("frDelay"), v = $("frDelayVal"); if (!d || !v) return;
+  v.textContent = frDelayFmt(Number(d.value) * FR_DELAY_UNIT);
+}
 function frText() {
   var s = $("frSlider"), v = $("frVal"); if (!s || !v) return;
   v.textContent = frFmt(frToValue(s.value));
@@ -376,8 +385,14 @@ function frText() {
 function drawFree() {
   var s = $("frSlider"), i = $("frInfo"); if (!s || !i) return;
   if (fr === null) { i.textContent = "Loading…"; return; }
-  if (fr.error) { s.disabled = true; i.style.color = "var(--bad)"; i.textContent = fr.error; return; }
+  if (fr.error) { s.disabled = true; if ($("frDelay")) $("frDelay").disabled = true; i.style.color = "var(--bad)"; i.textContent = fr.error; return; }
   s.disabled = false;
+  var dl = $("frDelay");
+  if (dl) {
+    dl.disabled = false;
+    if (document.activeElement !== dl && !frSaving) { dl.value = Math.round((fr.delayMs || 0) / FR_DELAY_UNIT); $("frDelayVal").textContent = frDelayFmt(fr.delayMs || 0); }
+    else frDelayText();
+  }
   if (document.activeElement !== s && !frSaving) { s.value = frToStep(fr.max); $("frVal").textContent = frFmt(fr.max); }   // show the exact saved value
   else frText();
   i.style.color = "var(--mute)";
@@ -395,7 +410,20 @@ function loadFree() {
     drawFree();
   });
 }
-document.addEventListener("input", function (e) { if (e.target && e.target.id === "frSlider") frText(); });
+document.addEventListener("input", function (e) {
+  if (!e.target) return;
+  if (e.target.id === "frSlider") frText();
+  else if (e.target.id === "frDelay") frDelayText();
+});
+document.addEventListener("change", function (e) {
+  if (!e.target || e.target.id !== "frDelay") return;
+  frSaving = true;
+  relay("/admin/free", { delayMs: Number(e.target.value) * FR_DELAY_UNIT }).then(function (d) {
+    frSaving = false;
+    if (!(d._ok && d.ok)) { var i = $("frInfo"); if (i) { i.style.color = "var(--bad)"; i.textContent = d.error || "Could not save."; } return; }
+    loadFree();
+  });
+});
 document.addEventListener("change", function (e) {
   if (!e.target || e.target.id !== "frSlider") return;
   frSaving = true;
